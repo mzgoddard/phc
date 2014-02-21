@@ -1,0 +1,4 @@
+[submodule "vendor/libtap"]
+	path = vendor/libtap
+	url = git://github.com/mzgoddard/libtap.git
+	branch = ansicolor
