@@ -8,8 +8,8 @@ typedef struct _phlistiterator {
   phlistnode *node;
 } _phlistiterator;
 
-#define phlistiterator(next, deref, list, node) ((phlistiterator) { \
-  next, deref, list, node \
+#define phlistiterator(list, node) ((phlistiterator) { \
+  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node \
 })
 
 phbool phListNext(_phlistiterator *self) {
@@ -51,9 +51,7 @@ phiterator * phIterator(phlist *self, phlistiterator *itr) {
   if (itr == NULL) {
     itr = phAlloc(phlistiterator);
   }
-  *itr = phlistiterator(
-    (phiteratornext) phListNext, (phiteratorderef) phListDeref, self, NULL
-  );
+  *itr = phlistiterator(self, NULL);
   return (phiterator *) itr;
 }
 

@@ -132,4 +132,43 @@ void test_list() {
     phIterate(itr, iterateTestItr, &testData);
     phDump(&list, NULL);
   }
+
+  {
+    note("concat iteration");
+    phlist list1 = phlist();
+    phlist list2 = phlist();
+    char *a = "data1";
+    char *b = "data2";
+    char *c = "data3";
+
+    phAppend(&list1, a);
+    phAppend(&list2, b);
+    phAppend(&list2, c);
+    phlistiterator _itr;
+    phIterate(phIterator(&list2, &_itr), (phitrfn) phAppend, &list1);
+
+    struct iterateTestData testData = {
+      0,
+      { a, b, c, NULL }
+    };
+    phIterate(phIterator(&list1, &_itr), iterateTestItr, &testData);
+    phDump(&list1, NULL);
+    phDump(&list2, NULL);
+  }
+
+  {
+    note("phlistv");
+    char *a = "data1";
+    char *b = "data2";
+    char *c = "data3";
+    phlist list = phlistv(a, b, c);
+
+    struct iterateTestData testData = {
+      0,
+      { a, b, c, NULL }
+    };
+    phlistiterator _itr;
+    phIterate(phIterator(&list, &_itr), iterateTestItr, &testData);
+    phDump(&list, NULL);
+  }
 }
