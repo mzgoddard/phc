@@ -2,6 +2,7 @@
 #define PH_H_7BP0TPQV
 
 #include <stdlib.h>
+#include <tgmath.h>
 
 // https://groups.google.com/forum/#!topic/comp.std.c/d-6Mj5Lko_s
 #define PP_NARG(...) \
@@ -25,6 +26,18 @@
   19,18,17,16,15,14,13,12,11,10, \
   9,8,7,6,5,4,3,2,1,0
 
+// Memory
+
+#ifndef phAlloc
+#define phAlloc(type) ((type *) malloc(sizeof(type)))
+#endif
+
+#ifndef phFree
+#define phFree(data) (free(data))
+#endif
+
+// Arithmetic types
+
 #ifndef phdouble
 #define phdouble double
 #endif
@@ -44,6 +57,8 @@
 #ifndef phbool
 #define phbool _Bool
 #endif
+
+// Large Arithmetic Types
 
 typedef struct phv {
   phdouble x, y;
@@ -73,6 +88,8 @@ typedef struct phray {
 } phray;
 
 #define phray(p, d) ((phray) {p, d})
+
+// Iteration Types
 
 typedef phbool (*phiteratornext)(void *);
 typedef void * (*phiteratorderef)(void *);
@@ -106,8 +123,16 @@ typedef struct phlist {
 })
 
 typedef struct phlistiterator {
-  void *_value[4];
+  void *_value1[4];
+  phlistnode _value2;
 } phlistiterator;
+
+typedef struct _phlistiterator {
+  phiterator iterator;
+  phlist *list;
+  phlistnode *node;
+  phlistnode fakeHead;
+} _phlistiterator;
 
 typedef struct pharray {
   phint capacity;
@@ -121,9 +146,26 @@ typedef struct pharray {
 })
 
 typedef struct pharrayiterator {
-  void *_value1[3];
-  phint _value2;
+  void *_value1;
+  void *_value2;
+  void **_value3;
+  void **_value4;
+  phbool _value5;
 } pharrayiterator;
+
+typedef struct _pharrayiterator {
+  phiterator iterator;
+  void **items;
+  void **end;
+  phbool test;
+} _pharrayiterator;
+
+#define pharrayiterator(array) ((pharrayiterator) { \
+  (phiteratornext) phArrayNext, (phiteratorderef) phArrayDeref, \
+  array->items - 1, array->items + array->capacity, 0 \
+})
+
+// Physics Types
 
 typedef struct phcollision {
   phdouble ingress;
@@ -239,18 +281,53 @@ typedef struct phstick {
   phv factor;
 } phstick;
 
-phv phZero();
+#ifdef EMSCRIPTEN
+// Compiling under emscripten complains about implicit sqrt declaration.
+double sqrt(double);
+#endif
 
-phv phAdd(phv, phv);
-phv phSub(phv, phv);
-phv phMul(phv, phv);
-phv phDiv(phv, phv);
-phv phScale(phv, phdouble);
-phdouble phDot(phv, phv);
-phdouble phCross(phv, phv);
-phdouble phMag2(phv);
-phdouble phMag(phv);
-phv phUnit(phv);
+static phv phZero() {return phv(0, 0);}
+
+static phv phAdd(phv a, phv b) {
+  return phv(a.x + b.x, a.y + b.y);
+}
+
+static phv phSub(phv a, phv b) {
+  return phv(a.x - b.x, a.y - b.y);
+}
+
+static phv phMul(phv a, phv b) {
+  return phv(a.x * b.x, a.y * b.y);
+}
+
+static phv phDiv(phv a, phv b) {
+  return phv(a.x / b.x, a.y / b.y);
+}
+
+static phv phScale(phv a, phdouble s) {
+  return phv(a.x * s, a.y * s);
+}
+
+static phdouble phDot(phv a, phv b) {
+  return a.x * b.x + a.y * b.y;
+}
+
+static phdouble phCross(phv a, phv b) {
+  return a.x * b.y - a.y * b.x;
+}
+
+static phdouble phMag2(phv a) {
+  return phDot(a, a);
+}
+
+static phdouble phMag(phv a) {
+  return sqrt(phMag2(a));
+}
+
+static phv phUnit(phv a) {
+  phdouble mag = phMag(a);
+  return phScale(a, 1.0 / mag);
+}
 
 // phM, Matrix functions
 
@@ -269,16 +346,65 @@ phbox phBoxTranslate(phbox, phv);
 
 void phClean(phlist *, void (*freeFn)(void *));
 void phDump(phlist *, void (*freeFn)(void *));
-phiterator * phIterator(phlist *, phlistiterator *);
 phlist * phAppend(phlist *, void *);
 phlist * phInsert(phlist *, int index, void *);
 phlist * phRemove(phlist *, void *);
 
+#define phlistiterator(list, node) ((phlistiterator) { \
+  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
+  list->first, NULL, NULL \
+})
+
+static phbool phListNext(_phlistiterator *self) {
+  phlistnode *node = self->node;
+  if (node) {
+    self->node = node->next;
+  }
+  return self->node != NULL;
+}
+
+static void * phListDeref(_phlistiterator *self) {
+  phlistnode *node = self->node;
+  return node ? node->item : NULL;
+}
+
+static phiterator * phIterator(phlist *self, phlistiterator *itr) {
+  if (itr == NULL) {
+    itr = phAlloc(phlistiterator);
+  }
+  *itr = phlistiterator(self, NULL);
+  ((_phlistiterator *) itr)->node = &((_phlistiterator *) itr)->fakeHead;
+  return (phiterator *) itr;
+}
+
 // phIterator
 
-phbool phNext(phiterator *);
-void * phDeref(phiterator *);
-void phIterate(phiterator *, phitrfn, void *);
+static phbool phNext(phiterator *self) {
+  return self->next(self);
+}
+
+static void * phDeref(phiterator *self) {
+  return self->deref(self);
+}
+
+static void phStaticIterate(
+  phbool (*next)(phiterator *),
+  void * (*deref)(phiterator *),
+  phiterator *self,
+  phitrfn itr,
+  void *ctx
+) {
+  while (next(self)) {
+    itr(ctx, deref(self));
+  }
+}
+
+static void phIterate(phiterator *self, phitrfn itr, void *ctx) {
+  while (phNext(self)) {
+    itr(ctx, phDeref(self));
+  }
+}
+
 void phIterateN(phiterator *, phint, phitrfn, void *);
 void phIterateStop(phiterator *, phitrstopfn, void *);
 
@@ -289,7 +415,24 @@ void * phGetIndex(phiterator *, phint);
 phbool phSame(void *ctx, void *item);
 
 pharray * phToArray(phiterator *, pharray *);
-phiterator * phArrayIterator(pharray *, pharrayiterator *);
+
+static phbool phArrayNext(_pharrayiterator *self) {
+  self->items++;
+  self->test = self->items < self->end;
+  return self->test;
+}
+
+static void * phArrayDeref(_pharrayiterator *self) {
+  return self->test ? *(self->items) : NULL;
+}
+
+static phiterator * phArrayIterator(pharray *self, pharrayiterator *itr) {
+  if (itr == NULL) {
+    itr = phAlloc(pharrayiterator);
+  }
+  *itr = pharrayiterator(self);
+  return (phiterator *) itr;
+}
 
 // phParticle
 
@@ -340,15 +483,5 @@ phworld * phWorldRemoveConstraint(phworld *, phconstraint *);
 phbyte * phCompositeFreeze(phlist *, phlist *);
 void phCompositeThaw(phlist *, phlist *, phbyte *);
 void phCompositeCopy(phlist *dst1, phlist *dst2, phlist *src1, phlist *src2);
-
-// Memory
-
-#ifndef phAlloc
-#define phAlloc(type) ((type *) malloc(sizeof(type)))
-#endif
-
-#ifndef phFree
-#define phFree(data) (free(data))
-#endif
 
 #endif /* end of include guard: PH_H_7BP0TPQV */

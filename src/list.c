@@ -2,30 +2,10 @@
 
 #define phlistnode(next, prev, item) ((phlistnode) { next, prev, item })
 
-typedef struct _phlistiterator {
-  phiterator iterator;
-  phlist *list;
-  phlistnode *node;
-} _phlistiterator;
-
 #define phlistiterator(list, node) ((phlistiterator) { \
-  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node \
+  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
+  list->first, NULL, NULL \
 })
-
-phbool phListNext(_phlistiterator *self) {
-  if (!self->node) {
-    self->node = self->list->first;
-    return self->node != NULL;
-  } else if (self->node->next) {
-    self->node = self->node->next;
-    return 1;
-  }
-  return 0;
-}
-
-void * phListDeref(_phlistiterator *self) {
-  return self->node != NULL ? self->node->item : NULL;
-}
 
 void phClean(phlist *self, void (*freeItem)(void *)) {
   phlistnode *node = self->first;
@@ -46,23 +26,6 @@ void phClean(phlist *self, void (*freeItem)(void *)) {
   self->first = NULL;
   self->last = NULL;
 }
-
-phiterator * phIterator(phlist *self, phlistiterator *itr) {
-  if (itr == NULL) {
-    itr = phAlloc(phlistiterator);
-  }
-  *itr = phlistiterator(self, NULL);
-  return (phiterator *) itr;
-}
-
-// void phIterate(phlist *self, void (*itr)(void *, void *), void *ctx) {
-//   phlistnode *node = self->first;
-// 
-//   while (node != NULL) {
-//     itr(ctx, node->item);
-//     node = node->next;
-//   }
-// }
 
 void phDump(phlist *self, void (*freeItem)(void *)) {
   phlistnode *node = self->first;

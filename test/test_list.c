@@ -10,9 +10,10 @@ void iterateTestItr(void *ctx, void *item) {
   struct iterateTestData *data = ctx;
   ok(
     item == data->data[ data->index ],
-    "Item %d is %s.",
+    "Item %d is %s, should be %s.",
     data->index,
-    data->data[ data->index ]
+    data->data[ data->index ],
+    item
   );
   data->index++;
 }

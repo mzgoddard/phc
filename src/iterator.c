@@ -1,29 +1,5 @@
 #include "ph.h"
 
-typedef struct _pharrayiterator {
-  phiterator iterator;
-  pharray *array;
-  phint index;
-} _pharrayiterator;
-
-#define pharrayiterator(array, index) ((pharrayiterator) { \
-  (phiteratornext) phArrayNext, (phiteratorderef) phArrayDeref, array, index \
-})
-
-phbool phNext(phiterator *self) {
-  return self->next(self);
-}
-
-void * phDeref(phiterator *self) {
-  return self->deref(self);
-}
-
-void phIterate(phiterator *self, phitrfn itr, void *ctx) {
-  while (phNext(self)) {
-    itr(ctx, phDeref(self));
-  }
-}
-
 void phIterateN(phiterator *self, phint n, phitrfn itr, void *ctx) {
   while (n-- && phNext(self)) {
     itr(ctx, phDeref(self));
@@ -75,23 +51,4 @@ pharray * phToArray(phiterator *self, pharray *ary) {
     *items = phDeref(self);
   }
   return ary;
-}
-
-phbool phArrayNext(_pharrayiterator *self) {
-  self->index++;
-  return self->index < self->array->capacity;
-}
-
-void * phArrayDeref(_pharrayiterator *self) {
-  return self->index > -1 && self->index < self->array->capacity ?
-    self->array->items[self->index] :
-    NULL;
-}
-
-phiterator * phArrayIterator(pharray *self, pharrayiterator *itr) {
-  if (itr == NULL) {
-    itr = phAlloc(pharrayiterator);
-  }
-  *itr = pharrayiterator(self, -1);
-  return (phiterator *) itr;
 }

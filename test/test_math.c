@@ -1,5 +1,3 @@
-#include <math.h>
-
 #include "ph.h"
 #include "tap.h"
 

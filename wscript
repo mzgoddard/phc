@@ -10,9 +10,26 @@ import waflib.Logs
 def configure(ctx):
     ctx.load('compiler_c')
 
+    try:
+        ctx.find_program( 'clang' )
+        ctx.env.CC = 'clang'
+        ctx.env.LINK_CC = 'clang'
+    except:
+        pass
+
+    # try:
+    #     ctx.find_program( 'emcc', path_list=['~/Projects/emscripten'] )
+    #     ctx.env.CC = 'emcc'
+    #     ctx.env.LINK_CC = 'emcc'
+    #     ctx.env.cprogram_PATTERN = '%s.js'
+    # except:
+    #     pass
+
     ctx.env.append_value( 'CFLAGS', '-g' )
-    ctx.env.append_value( 'CFLAGS', '-O2' )
+    ctx.env.append_value( 'CFLAGS', '-O4' )
     ctx.env.append_value( 'CFLAGS', '-std=c99' )
+    ctx.env.append_value( 'LINKFLAGS', '-g' )
+    ctx.env.append_value( 'LINKFLAGS', '-O4' )
 
     ctx.start_msg( 'init submodules' )
     gitStatus = ctx.exec_command( 'git submodule init && git submodule update' )
@@ -46,6 +63,16 @@ def build(bld):
         source=bld.path.ant_glob('test/*.c'),
         includes='src ../vendor/libtap',
         target='ph-test',
+        libpath='../vendor/libtap',
+        lib='tap m',
+        use='ph',
+        install_path=None
+    )
+
+    bld.program(
+        source=bld.path.ant_glob('bench/*.c'),
+        includes='src ../vendor/libtap',
+        target='ph-bench',
         libpath='../vendor/libtap',
         lib='tap m',
         use='ph',
