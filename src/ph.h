@@ -169,11 +169,19 @@ typedef struct _pharrayiterator {
 
 typedef struct phcollision {
   phdouble ingress;
-  phdouble lx, ly;
+  phdouble distance;
+  phdouble lambx, lamby;
 } phcollision;
 
+typedef struct phparticleworlddata {
+  phint sleepCounter;
+  phlist collideWith;
+  phv oldPosition;
+  phbox box, oldBox;
+} phparticleworlddata;
+
 typedef struct phparticle {
-  phv position, lastPosition;
+  phv position, lastPosition, acceleration;
   phdouble radius, mass, friction, factor;
   phbool isStatic;
   phbool isTrigger;
@@ -188,15 +196,17 @@ typedef struct phparticle {
     struct phparticle *, struct phparticle *, struct phcollision *
   );
 
-  void *_worldData;
+  phparticleworlddata *_worldData;
 } phparticle;
 
-typedef struct phparticleworlddata {
-  phint sleepCounter;
-  phlist collisionWith;
-  phv oldPosition;
-  phbox box, oldBox;
-} phparticleworlddata;
+#define phparticle(pos) ((phparticle) { \
+  pos, pos, phZero(), \
+  1, 1, 1, 0.5, \
+  0, 0, 0, phlist(), \
+  ~0, ~0, \
+  NULL, NULL, \
+  NULL \
+})
 
 typedef struct phddvt {
   phbox box;
@@ -216,6 +226,10 @@ typedef struct phddvt {
 typedef struct phddvtiterator {
   phiterator iterator;
 } phddvtiterator;
+
+typedef struct phddvtpairiterator {
+  phiterator iterator;
+} phddvtpairiterator;
 
 typedef struct phworld {
   phlist particles;
@@ -324,6 +338,14 @@ static phdouble phMag(phv a) {
   return sqrt(phMag2(a));
 }
 
+static phdouble phHypot2(phdouble a, phdouble b) {
+  return a * a + b * b;
+}
+
+static phdouble phHypot(phdouble a, phdouble b) {
+  return sqrt(a * a + b * b);
+}
+
 static phv phUnit(phv a) {
   phdouble mag = phMag(a);
   return phScale(a, 1.0 / mag);
@@ -410,6 +432,7 @@ void phIterateStop(phiterator *, phitrstopfn, void *);
 
 phiterator * phFind(phiterator *, phcmpfn, void *);
 phint phIndexOf(phiterator *, phcmpfn, void *);
+phbool phContains(phiterator *, void *);
 
 void * phGetIndex(phiterator *, phint);
 phbool phSame(void *ctx, void *item);
@@ -440,7 +463,7 @@ void phParticleDump(phparticle *);
 void phParticleCopy(phparticle *, phparticle *);
 
 void phIntegrate(phparticle *, phdouble dt);
-void phTest(phparticle *, phparticle *, phcollision *);
+phbool phTest(phparticle *, phparticle *, phcollision *);
 void phSolve(phparticle *, phparticle *, phcollision *);
 // Ignore another particle or it's data.
 void phIgnore(phparticle *, void *);
@@ -463,7 +486,7 @@ void phDdvtAdd(phddvt *, phparticle *);
 void phDdvtRemove(phddvt *, phparticle *);
 void phDdvtUpdate(phddvt *, phparticle *);
 phiterator * phDdvtIterator(phddvt *, phddvtiterator *);
-phiterator * phDdvtPairIterator(phddvt *, phddvtiterator *);
+phiterator * phDdvtPairIterator(phddvt *, phddvtpairiterator *);
 
 // phWorld
 

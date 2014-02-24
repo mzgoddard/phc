@@ -57,7 +57,7 @@ def build(bld):
         'lib': 'm'
     }
     bld.stlib( **d )
-    bld.shlib( **d )
+    # bld.shlib( **d )
 
     bld.program(
         source=bld.path.ant_glob('test/*.c'),
@@ -70,12 +70,12 @@ def build(bld):
     )
 
     bld.program(
-        source=bld.path.ant_glob('bench/*.c'),
+        source=bld.path.ant_glob('src/*.c bench/*.c'),
         includes='src ../vendor/libtap',
         target='ph-bench',
         libpath='../vendor/libtap',
         lib='tap m',
-        use='ph',
+        # use='ph',
         install_path=None
     )
 

@@ -33,6 +33,10 @@ phint phIndexOf(phiterator *self, phcmpfn cmp, void *ctx) {
   return -1;
 }
 
+phbool phContains(phiterator *self, void *ctx) {
+  return phIndexOf(self, phSame, ctx) != -1;
+}
+
 void * phGetIndex(phiterator *self, phint index) {
   index += 1;
   while (index-- && phNext(self)) {}

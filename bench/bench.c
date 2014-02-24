@@ -25,6 +25,7 @@ static phbool bench_ansicolor = 0;
 
 void bench_math();
 void bench_iterator();
+void bench_particle();
 
 #define ANSI(_code_) (char *) (bench_ansicolor ? (ansicodes._code_) : "")
 
@@ -78,6 +79,7 @@ int main() {
 
   bench_math();
   bench_iterator();
+  bench_particle();
 
   done_testing();
 }
