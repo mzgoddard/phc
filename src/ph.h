@@ -123,16 +123,19 @@ typedef struct phlist {
 })
 
 typedef struct phlistiterator {
-  void *_value1[4];
-  phlistnode _value2;
-} phlistiterator;
-
-typedef struct _phlistiterator {
   phiterator iterator;
   phlist *list;
   phlistnode *node;
   phlistnode fakeHead;
-} _phlistiterator;
+} phlistiterator;
+
+#define _phlistiterator phlistiterator
+// typedef struct _phlistiterator {
+//   phiterator iterator;
+//   phlist *list;
+//   phlistnode *node;
+//   phlistnode fakeHead;
+// } _phlistiterator;
 
 typedef struct pharray {
   phint capacity;
@@ -208,10 +211,18 @@ typedef struct phparticle {
   NULL \
 })
 
+#define phparticleworlddata() ((phparticleworlddata) { \
+  0, phlist(), phv(0, 0), phbox(0, 0, 0, 0), phbox(0, 0, 0, 0) \
+})
+
 typedef struct phddvt {
   phbox box;
   phlist particles;
+  phint length;
+  phint minParticles;
   phint maxParticles;
+  phbool isSleeping;
+  struct phddvt *parent;
   union {
     struct phddvt *children[4];
     struct {
@@ -223,13 +234,52 @@ typedef struct phddvt {
   };
 } phddvt;
 
+typedef struct phddvtpair {
+  union {
+    phparticle *pair[2];
+    struct {
+      phparticle *a;
+      phparticle *b;
+    };
+  };
+} phddvtpair;
+
+#define phddvt(parent, box, min, max) ((phddvt) { \
+  box, phlist(), 0, min, max, 0, \
+  parent, NULL, NULL, NULL, NULL \
+})
+
+#define phddvtpair(a, b) ((phddvtpair) {a, b})
+
 typedef struct phddvtiterator {
   phiterator iterator;
+  phddvt *topDdvt;
+  phddvt *ddvt;
+  phlistiterator leafItr;
 } phddvtiterator;
+
+#define phddvtiterator(ddvt) ((phddvtiterator) { \
+  (phiteratornext) phDdvtNext, (phiteratorderef) phDdvtDeref, \
+  ddvt->parent, ddvt, \
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL \
+})
 
 typedef struct phddvtpairiterator {
   phiterator iterator;
+  phddvt *topDdvt;
+  phddvt *ddvt;
+  phlistiterator leafItr1;
+  phlistiterator leafItr2;
+  phddvtpair pair;
 } phddvtpairiterator;
+
+#define phddvtpairiterator(ddvt) ((phddvtpairiterator) { \
+  (phiteratornext) phDdvtPairNext, (phiteratorderef) phDdvtPairDeref, \
+  ddvt->parent, ddvt, \
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+  NULL, NULL \
+})
 
 typedef struct phworld {
   phlist particles;
@@ -358,11 +408,52 @@ phv phXf(phm, phv);
 
 // phBox
 
-phbox phAabb(phv, phdouble);
-phbox phCombine(phbox, phbox);
-phbool phContain(phbox, phbox);
-phbool phIntersect(phbox, phbox);
-phbox phBoxTranslate(phbox, phv);
+static phbox phAabb(phv c, phdouble r) {
+  return phbox(c.x - r, c.y + r, c.x + r, c.y - r);
+}
+
+#define MIN(a, b) (a < b ? a : b)
+#define MAX(a, b) (a > b ? a : b)
+
+static phbox phCombine(phbox a, phbox b) {
+  return phbox(
+    MIN(a.left, b.left), MAX(a.top, b.top),
+    MAX(a.right, b.right), MIN(a.bottom, b.bottom)
+  );
+}
+
+static phbool phIntersect(phbox a, phbox b) {
+  return a.left <= b.right && a.right >= b.left &&
+    a.bottom <= b.top && a.top >= b.bottom;
+}
+
+static phbox phBoxTranslate(phbox a, phv t) {
+  a.left += t.x;
+  a.top += t.y;
+  a.right += t.x;
+  a.bottom += t.y;
+  return a;
+}
+
+// define CENTERX for corner box functions phTL, phTR, phBL, phBR
+#define CENTERX (box.left + box.right) / 2
+#define CENTERY (box.bottom + box.top) / 2
+
+static phbox phTL(phbox box) {
+  return phbox(box.left, box.top, CENTERX, CENTERY);
+}
+
+static phbox phTR(phbox box) {
+  return phbox(CENTERX, box.top, box.right, CENTERY);
+}
+
+static phbox phBL(phbox box) {
+  return phbox(box.left, CENTERY, CENTERX, box.bottom);
+}
+
+static phbox phBR(phbox box) {
+  return phbox(CENTERX, CENTERY, box.right, box.bottom);
+}
 
 // phList, List functions
 
@@ -483,10 +574,14 @@ void phConstraintUpdate(void *, phworld *);
 
 void phDdvtDump(phddvt *);
 void phDdvtAdd(phddvt *, phparticle *);
-void phDdvtRemove(phddvt *, phparticle *);
-void phDdvtUpdate(phddvt *, phparticle *);
+void phDdvtRemove(phddvt *, phparticle *, phbox);
+void phDdvtWake(phddvt *, phparticle *);
+void phDdvtUpdate(phddvt *, phparticle *, phbox, phbox);
 phiterator * phDdvtIterator(phddvt *, phddvtiterator *);
 phiterator * phDdvtPairIterator(phddvt *, phddvtpairiterator *);
+
+phbool phDdvtNext(phddvtiterator *);
+void * phDdvtDeref(phddvtiterator *);
 
 // phWorld
 

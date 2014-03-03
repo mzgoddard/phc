@@ -172,4 +172,22 @@ void test_list() {
     phIterate(phIterator(&list, &_itr), iterateTestItr, &testData);
     phDump(&list, NULL);
   }
+
+  {
+    note("phIterate w/o removed values");
+    char *a = "data1";
+    char *b = "data2";
+    char *c = "data3";
+    phlist list = phlistv(a, b, c);
+
+    phRemove(&list, b);
+
+    struct iterateTestData testData = {
+      0,
+      { a, c, NULL }
+    };
+    phlistiterator _itr;
+    phIterate(phIterator(&list, &_itr), iterateTestItr, &testData);
+    phDump(&list, NULL);
+  }
 }

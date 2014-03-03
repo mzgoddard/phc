@@ -10,8 +10,10 @@ import waflib.Logs
 def configure(ctx):
     ctx.load('compiler_c')
 
+    # Last time debugged with clang it created invalid paths in the debug data
+    # which lead to missing function debug data for *.c code.
     try:
-        ctx.find_program( 'clang' )
+        ctx.find_program('clang')
         ctx.env.CC = 'clang'
         ctx.env.LINK_CC = 'clang'
     except:
@@ -25,11 +27,10 @@ def configure(ctx):
     # except:
     #     pass
 
-    ctx.env.append_value( 'CFLAGS', '-g' )
-    ctx.env.append_value( 'CFLAGS', '-O4' )
-    ctx.env.append_value( 'CFLAGS', '-std=c99' )
-    ctx.env.append_value( 'LINKFLAGS', '-g' )
-    ctx.env.append_value( 'LINKFLAGS', '-O4' )
+    ctx.env.append_value('CFLAGS', '-g')
+    ctx.env.append_value('CFLAGS', '-O4')
+    ctx.env.append_value('CFLAGS', '-std=c99')
+    ctx.env.append_value('LINKFLAGS', '-O4')
 
     ctx.start_msg( 'init submodules' )
     gitStatus = ctx.exec_command( 'git submodule init && git submodule update' )
@@ -57,7 +58,7 @@ def build(bld):
         'lib': 'm'
     }
     bld.stlib( **d )
-    # bld.shlib( **d )
+    bld.shlib( **d )
 
     bld.program(
         source=bld.path.ant_glob('test/*.c'),
@@ -70,12 +71,12 @@ def build(bld):
     )
 
     bld.program(
-        source=bld.path.ant_glob('src/*.c bench/*.c'),
+        source=bld.path.ant_glob('bench/*.c'),
         includes='src ../vendor/libtap',
         target='ph-bench',
         libpath='../vendor/libtap',
         lib='tap m',
-        # use='ph',
+        use='ph',
         install_path=None
     )
 
