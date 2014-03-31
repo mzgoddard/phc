@@ -171,6 +171,7 @@ typedef struct _pharrayiterator {
 // Physics Types
 
 typedef struct phcollision {
+  void *a, *b;
   phdouble ingress;
   phdouble distance;
   phdouble lambx, lamby;
@@ -299,9 +300,20 @@ typedef struct phworld {
   struct {
     phbox box;
     phddvt ddvt;
+    phlist collisions;
+    phlist nextCollisions;
   } _optimization;
   phint particlesAlive;
 } phworld;
+
+#define phworld(box) ((phworld) { \
+  phlist(), phlist(), \
+  phlist(), phlist(), \
+  1, 20, \
+  1 / 60.0, 0, 10, \
+  box, phddvt(NULL, box, 64, 128) \
+  0 \
+})
 
 typedef struct phrayiterator {
   phiterator iterator;
