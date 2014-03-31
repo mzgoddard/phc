@@ -129,7 +129,7 @@ void _phDdvtUpdateChild(
 }
 
 void _phDdvtTestAndAdd(phddvt *self, phparticle *particle) {
-  phbox box = particle->_worldData->box;
+  phbox box = particle->_worldData->oldBox;
   #define TEST_AND_ADD(corner) \
     if (phIntersect(self->corner->box, box)) { \
       _phDdvtAdd(self->corner, particle, &box); \
@@ -245,7 +245,7 @@ void _phDdvtUpdate(phddvt *self, phparticle *particle, phbox *old, phbox *new) {
 }
 
 void phDdvtAdd(phddvt *self, phparticle *particle) {
-  phbox box = particle->_worldData->box;
+  phbox box = particle->_worldData->oldBox;
   _phDdvtAdd(self, particle, &box);
 }
 
@@ -254,7 +254,7 @@ void phDdvtRemove(phddvt *self, phparticle *particle, phbox box) {
 }
 
 void phDdvtWake(phddvt *self, phparticle *particle) {
-  phbox box = particle->_worldData->box;
+  phbox box = particle->_worldData->oldBox;
   _phDdvtWake(self, particle, &box);
 }
 
