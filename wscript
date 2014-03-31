@@ -12,12 +12,12 @@ def configure(ctx):
 
     # Last time debugged with clang it created invalid paths in the debug data
     # which lead to missing function debug data for *.c code.
-    try:
-        ctx.find_program('clang')
-        ctx.env.CC = 'clang'
-        ctx.env.LINK_CC = 'clang'
-    except:
-        pass
+    # try:
+    #     ctx.find_program('clang')
+    #     ctx.env.CC = 'clang'
+    #     ctx.env.LINK_CC = 'clang'
+    # except:
+    #     pass
 
     # try:
     #     ctx.find_program( 'emcc', path_list=['~/Projects/emscripten'] )
@@ -28,9 +28,9 @@ def configure(ctx):
     #     pass
 
     ctx.env.append_value('CFLAGS', '-g')
-    ctx.env.append_value('CFLAGS', '-O4')
+    ctx.env.append_value('CFLAGS', '-O3')
     ctx.env.append_value('CFLAGS', '-std=c99')
-    ctx.env.append_value('LINKFLAGS', '-O4')
+    ctx.env.append_value('LINKFLAGS', '-O3')
 
     ctx.start_msg( 'init submodules' )
     gitStatus = ctx.exec_command( 'git submodule init && git submodule update' )
