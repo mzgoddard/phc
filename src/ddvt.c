@@ -33,16 +33,14 @@ void _phDdvtUpdateLeaf(
   phddvt *self, phparticle *particle, phbox *old, phbox *new
 ) {
   phbool intersects = phIntersect(self->box, *new);
-  phlistiterator _itr;
+  phbool lastIntersect = phIntersect(self->box, *old);
 
-  if (
-    intersects && phContains(phIterator(&self->particles, &_itr), particle)
-  ) {
+  if (intersects && !lastIntersect) {
     phDdvtAdd(self, particle);
     return;
   }
 
-  if (!intersects && phIntersect(self->box, *old)) {
+  if (!intersects && lastIntersect) {
     _phDdvtRemoveLeaf(self, particle);
   }
 }
