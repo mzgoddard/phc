@@ -329,19 +329,24 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
     _phDdvtNextChild((phddvtiterator *) self);
     // if leaf, iterate over particles
     if (self->ddvt && !self->ddvt->tl) {
+      // init the iterators, i = 0, j = i + 1
       if (self->leafItr1.list != &self->ddvt->particles) {
         phIterator(&self->ddvt->particles, &self->leafItr1);
         phListNext(&self->leafItr1);
         self->leafItr2 = self->leafItr1;
       }
+      // step j
       next = phListNext(&self->leafItr2);
       if (!next) {
+        // step i
         next = phListNext(&self->leafItr1);
+        // if there is still more, set j = i + 1
         if (next) {
           self->leafItr2 = self->leafItr1;
           next = phListNext(&self->leafItr2);
         }
       }
+      // reached the end of this volume, set i = NULL
       if (!next) {
         self->leafItr1.list = NULL;
       }
