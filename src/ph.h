@@ -658,6 +658,9 @@ phiterator * phDdvtPairIterator(phddvt *, phddvtpairiterator *);
 phbool phDdvtNext(phddvtiterator *);
 void * phDdvtDeref(phddvtiterator *);
 
+phbool phDdvtPairNext(phddvtpairiterator *);
+void * phDdvtPairDeref(phddvtpairiterator *);
+
 // phWorld
 
 void phWorldDump(phworld *);
