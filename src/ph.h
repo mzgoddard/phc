@@ -32,6 +32,14 @@
 #define phAlloc(type) ((type *) malloc(sizeof(type)))
 #endif
 
+#ifndef phCreate
+#define phCreate(type, ...) ({ \
+  type *ptr = malloc(sizeof(type)); \
+  *ptr = type(__VA_ARGS__); \
+  ptr; \
+})
+#endif
+
 #ifndef phFree
 #define phFree(data) (free(data))
 #endif
