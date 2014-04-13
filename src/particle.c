@@ -44,6 +44,10 @@ void phIntegrate(phparticle *self, phdouble dt) {
   self->acceleration = phZero();
 }
 
+void phTestReset(phparticle *self) {
+  phClean(&self->_worldData->collideWith, NULL);
+}
+
 phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
   if (self->isStatic && other->isStatic) {return 0;}
  
@@ -71,15 +75,27 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
     phlistiterator _listitr;
     if (
       self->_worldData &&
-        phContains(phIterator(&self->_worldData->collideWith, &_listitr), other)
+        phStaticContains(
+          (phiteratornext) phListNext, (phiteratorderef) phListDeref,
+          phIterator(&self->_worldData->collideWith, &_listitr),
+          other
+        )
     ) {
       return 0;
     }
 
-    if (phContains(phIterator(&self->ignore, &_listitr), other)) {
+    if (phStaticContains(
+      (phiteratornext) phListNext, (phiteratorderef) phListDeref,
+      phIterator(&self->ignore, &_listitr),
+      other)
+    ) {
       return 0;
     }
-    if (phContains(phIterator(&self->ignore, &_listitr), other->data)) {
+    if (phStaticContains(
+      (phiteratornext) phListNext, (phiteratorderef) phListDeref,
+      phIterator(&self->ignore, &_listitr),
+      other->data)
+    ) {
       return 0;
     }
 

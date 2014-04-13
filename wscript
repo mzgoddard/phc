@@ -46,6 +46,19 @@ def configure(ctx):
     else:
         ctx.fatal( 'fail' )
 
+    cc_env = ctx.env
+
+    ctx.setenv('sdl', cc_env)
+    try:
+        ctx.check_cfg(
+            path='sdl-config', args='--cflags --libs',
+            package='', uselib_store='SDL'
+        )
+
+        ctx.env.FRAMEWORK = [ 'Cocoa', 'OpenGL' ]
+    except:
+        ctx.env.DISABLED = True
+
 def build(bld):
     bld.install_files( '${PREFIX}/include', 'src/ph.h' )
 
@@ -79,6 +92,20 @@ def build(bld):
         use='ph',
         install_path=None
     )
+
+    # Build sdl example if it was able to configure.
+    if 'sdl' in bld.all_envs and not bld.all_envs['sdl']['DISABLED']:
+        bld.env = bld.all_envs['sdl']
+
+        bld.program(
+            source=bld.path.ant_glob('example/sdl/*.c'),
+            includes='src',
+            target='sdl-example',
+            lib='m',
+            framework=['Cocoa', 'OpenGL'],
+            use='ph SDL',
+            install_path=None
+        )
 
 import waflib.Scripting, waflib.Context
 
