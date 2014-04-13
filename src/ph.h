@@ -629,6 +629,7 @@ void phParticleCopy(phparticle *, phparticle *);
 
 void phIntegrate(phparticle *, phdouble dt);
 phbool phTest(phparticle *, phparticle *, phcollision *);
+void phTestReset(phparticle *);
 void phSolve(phparticle *, phparticle *, phcollision *);
 // Ignore another particle or it's data.
 void phIgnore(phparticle *, void *);
