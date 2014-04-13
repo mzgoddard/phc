@@ -94,9 +94,7 @@ void _phDdvtUpdateChild(
   phbool added = 0;
   phbool removed = 0;
 
-  #define INTERSECT_AND_UPDATE(corner) \
-    phint corner ## Intersect = phIntersect(self->corner->box, *new); \
-    phint corner ## LastIntersect = phIntersect(self->corner->box, *old); \
+#define INTERSECT_AND_UPDATE(corner) \
     \
     if (corner ## Intersect && corner ## LastIntersect) { \
       _phDdvtUpdate(self->corner, particle, old, new); \
@@ -109,9 +107,57 @@ void _phDdvtUpdateChild(
       removed = 1; \
     }
 
+  phbox *tlBox = &self->tl->box;
+  phint tlIntersect = phIntersect(*tlBox, *new);
+  phint tlLastIntersect = phIntersect(*tlBox, *old);
+  // phint tlIntersect = phIntersect(self->tl->box, *new);
+  // phint tlLastIntersect = phIntersect(self->tl->box, *old);
   INTERSECT_AND_UPDATE(tl)
+  phbox *trBox = &self->tr->box;
+  phint trIntersect =
+    (tlIntersect && trBox->left <= new->right && trBox->right >= new->left) ||
+      phIntersect(*trBox, *new);
+  phint trLastIntersect =
+    (tlLastIntersect &&
+      trBox->left <= old->right &&
+      trBox->right >= old->left
+    ) ||
+      phIntersect(*trBox, *old);
+  // phint trIntersect = phIntersect(self->tr->box, *new);
+  // phint trLastIntersect = phIntersect(self->tr->box, *old);
   INTERSECT_AND_UPDATE(tr)
+  phbox *blBox = &self->bl->box;
+  phint blIntersect =
+    (tlIntersect && blBox->bottom <= new->top && blBox->top >= new->bottom) ||
+      phIntersect(*blBox, *new);
+  phint blLastIntersect =
+    (tlLastIntersect &&
+      blBox->bottom <= old->top &&
+      blBox->top >= old->bottom
+    ) ||
+      phIntersect(*blBox, *old);
+  // phint blIntersect = phIntersect(self->bl->box, *new);
+  // phint blLastIntersect = phIntersect(self->bl->box, *old);
   INTERSECT_AND_UPDATE(bl)
+  phbox *brBox = &self->br->box;
+  phint brIntersect =
+    (trIntersect && blIntersect) ||
+    (trIntersect && brBox->bottom <= new->top && brBox->top >= new->bottom) ||
+    (blIntersect && brBox->left <= new->right && brBox->right >= new->left) ||
+      phIntersect(*brBox, *new);
+  phint brLastIntersect =
+    (trLastIntersect && blLastIntersect) ||
+    (trLastIntersect &&
+      brBox->bottom <= old->top &&
+      brBox->top >= old->bottom
+    ) ||
+    (blLastIntersect &&
+      brBox->left <= old->right &&
+      brBox->right >= old->left
+    ) ||
+      phIntersect(*brBox, *old);
+  // phint brIntersect = phIntersect(self->br->box, *new);
+  // phint brLastIntersect = phIntersect(self->br->box, *old);
   INTERSECT_AND_UPDATE(br)
 
   #undef INTERSECT_AND_UPDATE
