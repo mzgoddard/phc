@@ -36,6 +36,8 @@
 #define phFree(data) (free(data))
 #endif
 
+typedef void (*phfreefn)(void *);
+
 // Arithmetic types
 
 #ifndef phdouble
@@ -171,6 +173,7 @@ typedef struct _pharrayiterator {
 // Physics Types
 
 typedef struct phcollision {
+  void *a, *b;
   phdouble ingress;
   phdouble distance;
   phdouble lambx, lamby;
@@ -211,8 +214,8 @@ typedef struct phparticle {
   NULL \
 })
 
-#define phparticleworlddata() ((phparticleworlddata) { \
-  0, phlist(), phv(0, 0), phbox(0, 0, 0, 0), phbox(0, 0, 0, 0) \
+#define phparticleworlddata(oldBox) ((phparticleworlddata) { \
+  0, phlist(), phv(0, 0), phbox(0, 0, 0, 0), oldBox \
 })
 
 typedef struct phddvt {
@@ -292,6 +295,7 @@ typedef struct phworld {
     phint maxSleepCounter;
   } config;
   struct {
+    phbool insideStep;
     phdouble dt;
     phdouble dtInterval;
     phint maxSubSteps;
@@ -299,9 +303,37 @@ typedef struct phworld {
   struct {
     phbox box;
     phddvt ddvt;
+    phlist collisions;
+    phlist nextCollisions;
   } _optimization;
+  struct {
+    phlist garbage;
+    phlist next;
+  } _garbage;
   phint particlesAlive;
 } phworld;
+
+#define phworld(box) ((phworld) { \
+  phlist(), phlist(), \
+  phlist(), phlist(), \
+  1, 20, \
+  0, 1 / 60.0, 0, 10, \
+  box, phddvt(NULL, box, 64, 128), phlist(), phlist(), \
+  phlist(), phlist(), \
+  0 \
+})
+
+typedef struct phworldgarbage {
+  void *item;
+  phitrfn fn;
+  phfreefn freefn;
+} phworldgarbage;
+
+#define phworldgarbage(item, fn, freefn) ((phworldgarbage) { \
+  item, \
+  fn, \
+  freefn \
+})
 
 typedef struct phrayiterator {
   phiterator iterator;
@@ -410,6 +442,10 @@ phv phXf(phm, phv);
 
 static phbox phAabb(phv c, phdouble r) {
   return phbox(c.x - r, c.y + r, c.x + r, c.y - r);
+}
+
+static phv phCenter(phbox b) {
+  return phv((b.right - b.left) / 2, (b.top - b.bottom) / 2);
 }
 
 #define MIN(a, b) (a < b ? a : b)
@@ -587,14 +623,17 @@ void * phDdvtDeref(phddvtiterator *);
 
 void phWorldDump(phworld *);
 void phWorldStep(phworld *, phdouble);
+void phWorldInternalStep(phworld *);
 phparticle * phWorldRayCast(phworld *, phray);
 phiterator * phWorldRayIterator(phworld *, phray, phrayiterator *);
 phiterator * phWorldBoxIterator(phworld *, phbox, phboxiterator *);
 
 phworld * phWorldAddParticle(phworld *, phparticle *);
 phworld * phWorldRemoveParticle(phworld *, phparticle *);
+phworld * phWorldSafeRemoveParticle(phworld *, phparticle *, phfreefn);
 phworld * phWorldAddConstraint(phworld *, phconstraint *);
 phworld * phWorldRemoveConstraint(phworld *, phconstraint *);
+phworld * phWorldSafeRemoveConstraint(phworld *, phconstraint *, phfreefn);
 
 // phComposite
 

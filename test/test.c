@@ -6,6 +6,7 @@ void test_iterator();
 void test_list();
 void test_particle();
 void test_ddvt();
+void test_world();
 
 int main() {
   ansicolor(getenv( "ANSICOLOR" ) != NULL);
@@ -16,6 +17,7 @@ int main() {
   test_list();
   test_particle();
   test_ddvt();
+  test_world();
 
   done_testing();
 }
