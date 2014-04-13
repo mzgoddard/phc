@@ -7,26 +7,6 @@
   list->first, NULL, NULL \
 })
 
-void phClean(phlist *self, void (*freeItem)(void *)) {
-  phlistnode *node = self->first;
-
-  while (node != NULL) {
-    phlistnode *next = node->next;
-    if (freeItem != NULL) {
-      freeItem(node->item);
-    }
-
-    node->next = self->freeList;
-    self->freeList = node;
-
-    node = next;
-  }
-
-  self->length = 0;
-  self->first = NULL;
-  self->last = NULL;
-}
-
 void phDump(phlist *self, void (*freeItem)(void *)) {
   phlistnode *node = self->first;
 

@@ -493,7 +493,6 @@ static phbox phBR(phbox box) {
 
 // phList, List functions
 
-void phClean(phlist *, void (*freeFn)(void *));
 void phDump(phlist *, void (*freeFn)(void *));
 phlist * phAppend(phlist *, void *);
 phlist * phInsert(phlist *, int index, void *);
@@ -503,6 +502,31 @@ phlist * phRemove(phlist *, void *);
   (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
   list->first, NULL, NULL \
 })
+
+static void phClean(phlist *self, void (*freeItem)(void *)) {
+  if (!freeItem) {
+    if (self->last) {
+      self->last->next = self->freeList;
+      self->freeList = self->first;
+    }
+  } else {
+    phlistnode *node = self->first;
+
+    while (node) {
+      phlistnode *next = node->next;
+      freeItem(node->item);
+
+      node->next = self->freeList;
+      self->freeList = node;
+
+      node = next;
+    }
+  }
+
+  self->length = 0;
+  self->first = NULL;
+  self->last = NULL;
+}
 
 static phbool phListNext(_phlistiterator *self) {
   phlistnode *node = self->node;
@@ -582,6 +606,20 @@ static phiterator * phArrayIterator(pharray *self, pharrayiterator *itr) {
   }
   *itr = pharrayiterator(self);
   return (phiterator *) itr;
+}
+
+static phbool phStaticContains(
+  phiteratornext next,
+  phiteratorderef deref,
+  phiterator *self,
+  void *item
+) {
+  while (next(self)) {
+    if (item == deref(self)) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 // phParticle
