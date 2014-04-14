@@ -189,7 +189,9 @@ typedef struct phcollision {
 
 typedef struct phparticleworlddata {
   phint sleepCounter;
-  phlist collideWith;
+  // phlist collideWith;
+  pharray collideWith;
+  phint collideWithIndex;
   phv oldPosition;
   phbox box, oldBox;
 } phparticleworlddata;
@@ -223,7 +225,7 @@ typedef struct phparticle {
 })
 
 #define phparticleworlddata(oldBox) ((phparticleworlddata) { \
-  0, phlist(), phv(0, 0), phbox(0, 0, 0, 0), oldBox \
+  0, pharray(0, NULL), 0, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
 })
 
 typedef struct phddvt {
@@ -633,6 +635,7 @@ static phbool phStaticContains(
 // phParticle
 
 void phParticleDump(phparticle *);
+void phParticleWorldDataDump(phparticleworlddata *);
 void phParticleCopy(phparticle *, phparticle *);
 
 void phIntegrate(phparticle *, phdouble dt);
