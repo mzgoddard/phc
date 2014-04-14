@@ -540,10 +540,7 @@ static void phClean(phlist *self, void (*freeItem)(void *)) {
 
 static phbool phListNext(_phlistiterator *self) {
   phlistnode *node = self->node;
-  if (node) {
-    self->node = node->next;
-  }
-  return self->node != NULL;
+  return node ? self->node = node->next : NULL;
 }
 
 static void * phListDeref(_phlistiterator *self) {
