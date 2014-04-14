@@ -62,9 +62,6 @@ void phWorldInternalStep(phworld *self) {
   // test and unsleep
   phddvtpairiterator _ditr;
   itr = phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
-  // Step to first pair then set leaf2 back one so while loop will work.
-  phDdvtPairNext((phddvtpairiterator *) itr);
-  _ditr.leafItr2.node = _ditr.leafItr1.node;
   // Most common DdvtPair next case is to iterate the second leaf itr.
   while (
     phListNext(&_ditr.leafItr2) || phDdvtPairNext((phddvtpairiterator *) itr)
