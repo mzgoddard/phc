@@ -59,15 +59,32 @@ void phWorldInternalStep(phworld *self) {
   // test and unsleep
   phddvtpairiterator _ditr;
   itr = phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
-  while (phDdvtPairNext((phddvtpairiterator *) itr)) {
+  // Step to first pair then set leaf2 back one so while loop will work.
+  phDdvtPairNext((phddvtpairiterator *) itr);
+  _ditr.leafItr2.node = _ditr.leafItr1.node;
+  // Most common DdvtPair next case is to iterate the second leaf itr.
+  while (
+    phListNext(&_ditr.leafItr2) || phDdvtPairNext((phddvtpairiterator *) itr)
+  ) {
     phcollision *nextCollision = _phWorldNextCollision(self);
-    phddvtpair *pair = phDeref(itr);
+
+    // Normally deref through public method.
+    // phddvtpair *pair = phDeref(itr);
+    // phparticle *a = pair->a;
+    // phparticle *b = pair->b;
+
+    // Deref takes care to make sure you can. Since we are in loop we can
+    // confirm that we can access leaf1 and leaf2.
+    phparticle *a = _ditr.leafItr1.node->item;
+    phparticle *b = _ditr.leafItr2.node->item;
+
+    // Pre test with boxes, which is cheaper than circle test. Then circle test.
     if (
-      phIntersect(pair->a->_worldData->oldBox, pair->b->_worldData->oldBox) &&
-        phTest(pair->a, pair->b, nextCollision)
+      phIntersect(a->_worldData->oldBox, b->_worldData->oldBox) &&
+        phTest(a, b, nextCollision)
     ) {
-      nextCollision->a = pair->a;
-      nextCollision->b = pair->b;
+      nextCollision->a = a;
+      nextCollision->b = b;
       _phWorldSaveCollision(self, nextCollision);
     }
   }
