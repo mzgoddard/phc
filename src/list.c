@@ -43,10 +43,9 @@ phlist * phAppend(phlist *self, void *item) {
 
   *node = phlistnode(NULL, self->last, item);
 
-  if (self->first == NULL) {
+  if (!self->first) {
     self->first = node;
-  }
-  if (self->last != NULL) {
+  } else {
     self->last->next = node;
   }
   self->last = node;
@@ -97,22 +96,20 @@ phlist * phInsert(phlist *self, int index, void *item) {
 phlist * phRemove(phlist *self, void *item) {
   phlistnode *node = self->first;
 
-  while (node != NULL && node->item != item) {
+  while (node && node->item != item) {
     node = node->next;
   }
 
-  if (node != NULL) {
-    if (node->prev != NULL) {
+  if (node) {
+    if (node->prev) {
       node->prev->next = node->next;
-    }
-    if (node->next != NULL) {
-      node->next->prev = node->prev;
-    }
-
-    if (self->first == node) {
+    } else {
       self->first = node->next;
     }
-    if (self->last == node) {
+
+    if (node->next) {
+      node->next->prev = node->prev;
+    } else {
       self->last = node->prev;
     }
 
