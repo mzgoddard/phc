@@ -12,13 +12,13 @@ void phWorldDump(phworld *self) {
   phDump(&self->_garbage.next, free);
 }
 
-phcollision *_phWorldNextCollision(phworld *self) {
-  phlistiterator _litr;
-  phiterator *itr = phIterator(&self->_optimization.nextCollisions, &_litr);
+static phcollision *_phWorldNextCollision(phworld *self) {
+  // phlistiterator _litr;
+  // phiterator *itr = phIterator(&self->_optimization.nextCollisions, &_litr);
   phcollision *col;
   // Get the first collision or create a new one.
-  if (phNext(itr)) {
-    col = phDeref(itr);
+  if (self->_optimization.nextCollisions.first) {
+    col = self->_optimization.nextCollisions.first->item;
   } else {
     col = phAlloc(phcollision);
     phAppend(&self->_optimization.nextCollisions, col);
@@ -26,7 +26,7 @@ phcollision *_phWorldNextCollision(phworld *self) {
   return col;
 }
 
-void _phWorldSaveCollision(phworld *self, phcollision *col) {
+static void _phWorldSaveCollision(phworld *self, phcollision *col) {
   phRemove(&self->_optimization.nextCollisions, col);
   phAppend(&self->_optimization.collisions, col);
 }
