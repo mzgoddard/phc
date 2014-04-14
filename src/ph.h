@@ -580,8 +580,10 @@ static void phStaticIterate(
 }
 
 static void phIterate(phiterator *self, phitrfn itr, void *ctx) {
-  while (phNext(self)) {
-    itr(ctx, phDeref(self));
+  phiteratornext next = self->next;
+  phiteratorderef deref = self->deref;
+  while (next(self)) {
+    itr(ctx, deref(self));
   }
 }
 
