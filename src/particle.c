@@ -8,6 +8,10 @@ void phParticleDump(phparticle *self) {
   phDump(&self->ignore, NULL);
 }
 
+void phParticleWorldDataDump(phparticleworlddata *self) {
+  free(self->collideWith.items);
+}
+
 void phParticleCopy(phparticle *self, phparticle *source) {
   self->position = source->position;
   self->lastPosition = source->position;
@@ -45,12 +49,54 @@ void phIntegrate(phparticle *self, phdouble dt) {
 }
 
 void phTestReset(phparticle *self) {
-  phClean(&self->_worldData->collideWith, NULL);
+  // phClean(&self->_worldData->collideWith, NULL);
+  self->_worldData->collideWithIndex = 0;
+}
+
+static phbool _phHasCollidedAlready(phparticle *self, phparticle *other) {
+  // return phStaticContains(
+  //   (phiteratornext) phListNext, (phiteratorderef) phListDeref,
+  //   phIterator(&self->_worldData->collideWith, &_listitr),
+  //   other
+  // );
+  for (phint i = 0; i < self->_worldData->collideWithIndex; ++i) {
+    if (self->_worldData->collideWith.items[i] == other) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static phbool _phIgnoresOther(phparticle *self, void *other) {
+  phlistiterator _listitr;
+  return phStaticContains(
+    (phiteratornext) phListNext, (phiteratorderef) phListDeref,
+    phIterator(&self->ignore, &_listitr),
+    other
+  );
+}
+
+static void _phAckCollision(phparticle *self, phparticle *other) {
+  if (self->_worldData) {
+    // phAppend(&self->_worldData->collideWith, other);
+    pharray *array = &self->_worldData->collideWith;
+    if (array->capacity == self->_worldData->collideWithIndex) {
+      void **oldItems = array->items;
+      array->items = calloc(array->capacity + 32, sizeof(phparticle *));
+      for (phint i = 0; i < array->capacity; ++i) {
+        array->items[i] = oldItems[i];
+      }
+      array->capacity += 32;
+      free(oldItems);
+    }
+
+    array->items[self->_worldData->collideWithIndex++] = other;
+  }
 }
 
 phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
   if (self->isStatic && other->isStatic) {return 0;}
- 
+
   if (
     (self->collideAgainst & other->collideMask) == 0 || 
       (other->collideAgainst & self->collideMask) == 0
@@ -72,39 +118,16 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
 
   ingress = abx*abx+aby*aby;
   if (((ingress < abr*abr))) {
-    phlistiterator _listitr;
-    if (
-      self->_worldData &&
-        phStaticContains(
-          (phiteratornext) phListNext, (phiteratorderef) phListDeref,
-          phIterator(&self->_worldData->collideWith, &_listitr),
-          other
-        )
-    ) {
+    if (self->_worldData && _phHasCollidedAlready(self, other)) {
       return 0;
     }
 
-    if (phStaticContains(
-      (phiteratornext) phListNext, (phiteratorderef) phListDeref,
-      phIterator(&self->ignore, &_listitr),
-      other)
-    ) {
-      return 0;
-    }
-    if (phStaticContains(
-      (phiteratornext) phListNext, (phiteratorderef) phListDeref,
-      phIterator(&self->ignore, &_listitr),
-      other->data)
-    ) {
+    if (_phIgnoresOther(self, other) || _phIgnoresOther(self, other->data)) {
       return 0;
     }
 
-    if (self->_worldData) {
-      phAppend(&self->_worldData->collideWith, other);
-    }
-    if (other->_worldData) {
-      phAppend(&other->_worldData->collideWith, self);
-    }
+    _phAckCollision(self, other);
+    _phAckCollision(other, self);
 
     ingress = sqrt(ingress);
 
