@@ -48,7 +48,10 @@ void phWorldInternalStep(phworld *self) {
     phIntegrate(particle, self->timing.dt);
     phTestReset(particle);
     // Update particle in ddvt
-    if (phMag2(phSub(particle->position, phCenter(oldBox))) > 0.5) {
+    if (
+      phMag2(phSub(particle->position, phCenter(oldBox))) >
+        particle->radius / 10
+    ) {
       newBox = phAabb(particle->position, particle->radius);
       phDdvtUpdate(&self->_optimization.ddvt, particle, oldBox, newBox);
       particle->_worldData->oldBox = newBox;
