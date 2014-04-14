@@ -30,7 +30,7 @@ def configure(ctx):
     ctx.env.append_value('CFLAGS', '-g')
     ctx.env.append_value('CFLAGS', '-O3')
     ctx.env.append_value('CFLAGS', '-std=c99')
-    ctx.env.append_value('LINKFLAGS', '-O3')
+    ctx.env.append_value('LINKFLAGS', '-O4')
 
     ctx.start_msg( 'init submodules' )
     gitStatus = ctx.exec_command( 'git submodule init && git submodule update' )
@@ -71,7 +71,7 @@ def build(bld):
         'lib': 'm'
     }
     bld.stlib( **d )
-    bld.shlib( **d )
+    # bld.shlib( **d )
 
     bld.program(
         source=bld.path.ant_glob('test/*.c'),
