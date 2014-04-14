@@ -140,6 +140,7 @@ phworld * phWorldRemoveParticle(phworld *self, phparticle *particle) {
   phbox oldBox = particle->_worldData->oldBox;
   phDdvtRemove(&self->_optimization.ddvt, particle, oldBox);
   phRemove(&self->particles, particle);
+  phParticleWorldDataDump(particle->_worldData);
   phFree(particle->_worldData);
   particle->_worldData = NULL;
   return self;
