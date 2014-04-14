@@ -93,7 +93,9 @@ void _phDdvtUpdateChild(
 
   #define INTERSECT_AND_UPDATE(corner) \
     if (corner ## Intersect && corner ## LastIntersect) { \
-      _phDdvtUpdate(self->corner, particle, old, new); \
+      if (self->corner->tl) { \
+        _phDdvtUpdate(self->corner, particle, old, new); \
+      } \
       updated = 1; \
     } else if (corner ## Intersect) { \
       _phDdvtAdd(self->corner, particle, new); \
@@ -247,14 +249,10 @@ void _phDdvtWake(phddvt *self, phparticle *particle, phbox *box) {
 }
 
 void _phDdvtUpdate(phddvt *self, phparticle *particle, phbox *old, phbox *new) {
-  if (!self->tl) {
-    _phDdvtUpdateLeaf(self, particle, old, new);
-  } else {
-    _phDdvtUpdateChild(self, particle, old, new);
+  _phDdvtUpdateChild(self, particle, old, new);
 
-    if (self->length <= self->minParticles) {
-      _phDdvtFromChildren(self);
-    }
+  if (self->length <= self->minParticles) {
+    _phDdvtFromChildren(self);
   }
 }
 
@@ -273,7 +271,9 @@ void phDdvtWake(phddvt *self, phparticle *particle) {
 }
 
 void phDdvtUpdate(phddvt *self, phparticle *particle, phbox old, phbox new) {
-  _phDdvtUpdate(self, particle, &old, &new);
+  if (self->tl) {
+    _phDdvtUpdate(self, particle, &old, &new);
+  }
 }
 
 void _phDdvtNextChild(phddvtiterator *self) {
