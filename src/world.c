@@ -26,8 +26,8 @@ static phcollision *_phWorldNextCollision(phworld *self) {
   return col;
 }
 
-static void _phWorldSaveCollision(phworld *self, phcollision *col) {
-  phRemove(&self->_optimization.nextCollisions, col);
+static void _phWorldSaveCollision(phworld *self) {
+  phcollision *col = phShift(&self->_optimization.nextCollisions);
   phAppend(&self->_optimization.collisions, col);
 }
 
@@ -85,7 +85,7 @@ void phWorldInternalStep(phworld *self) {
     ) {
       nextCollision->a = a;
       nextCollision->b = b;
-      _phWorldSaveCollision(self, nextCollision);
+      _phWorldSaveCollision(self);
     }
   }
 
@@ -96,16 +96,17 @@ void phWorldInternalStep(phworld *self) {
     phSolve(col->a, col->b, col);
   }
 
-  // swap collisions for next step
-  phlist tmp = self->_optimization.collisions;
-  self->_optimization.collisions = self->_optimization.nextCollisions;
-  self->_optimization.nextCollisions = tmp;
-  while (self->_optimization.collisions.length) {
-    itr = phIterator(&self->_optimization.collisions, &_litr);
-    phListNext((phlistiterator *) itr);
-    phcollision *col = phListDeref((phlistiterator *) itr);
-    phRemove(&self->_optimization.collisions, col);
-    phAppend(&self->_optimization.nextCollisions, col);
+  // Empty collisions into nextCollisions.
+  phlist *collisions = &self->_optimization.collisions;
+  phlist *nextCollisions = &self->_optimization.nextCollisions;
+  if (collisions->length > nextCollisions->length) {
+    phlist tmp = *collisions;
+    *collisions = *nextCollisions;
+    *nextCollisions = tmp;
+  }
+  while (collisions->length) {
+    phcollision *col = phShift(collisions);
+    phAppend(nextCollisions, col);
   }
 
   // post constraint
