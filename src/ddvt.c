@@ -181,6 +181,12 @@ void _phDdvtToChildren(phddvt *self) {
 void _phDdvtAddIfUnique(phddvt *self, phparticle *particle) {
   phlistiterator _listitr;
   if (!phContains(phIterator(&self->particles, &_listitr), particle)) {
+    if (
+      phBoxContain(self->box, particle->_worldData.oldBox) ||
+        !self->parent
+    ) {
+      particle->_worldData.topDdvt = self;
+    }
     _phDdvtAddLeaf(self, particle);
   }
 }
@@ -202,6 +208,10 @@ void _phDdvtFromChildren(phddvt *self) {
 
 void _phDdvtAdd(phddvt *self, phparticle *particle, phbox *box) {
   self->isSleeping = 0;
+
+  if (phBoxContain(self->box, *box) || !self->parent) {
+    particle->_worldData.topDdvt = self;
+  }
 
   if (!self->tl && self->length < self->maxParticles) {
     _phDdvtAddLeaf(self, particle);
@@ -271,8 +281,35 @@ void phDdvtWake(phddvt *self, phparticle *particle) {
 }
 
 void phDdvtUpdate(phddvt *self, phparticle *particle, phbox old, phbox new) {
-  if (self->tl) {
-    _phDdvtUpdate(self, particle, &old, &new);
+  phddvt *top = particle->_worldData.topDdvt;
+  phddvt *update = top;
+  if (phBoxContain(top->box, new)) {
+    while (top->tl) {
+      if (phBoxContain(top->tl->box, new)) {
+        top = top->tl;
+      } else if (phBoxContain(top->tr->box, new)) {
+        top = top->tr;
+      } else if (phBoxContain(top->bl->box, new)) {
+        top = top->bl;
+      } else if (phBoxContain(top->br->box, new)) {
+        top = top->br;
+      } else {
+        break;
+      }
+    }
+  } else {
+    while (top->parent) {
+      top = top->parent;
+      if (phBoxContain(top->box, new)) {
+        break;
+      }
+    }
+    update = top;
+  }
+  particle->_worldData.topDdvt = top;
+
+  if (update->tl) {
+    _phDdvtUpdate(update, particle, &old, &new);
   }
 }
 

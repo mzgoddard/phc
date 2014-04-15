@@ -192,6 +192,7 @@ typedef struct phparticleworlddata {
   // phlist collideWith;
   pharray collideWith;
   phint collideWithIndex;
+  void *topDdvt;
   phv oldPosition;
   phbox box, oldBox;
 } phparticleworlddata;
@@ -225,7 +226,7 @@ typedef struct phparticle {
 })
 
 #define phparticleworlddata(oldBox) ((phparticleworlddata) { \
-  0, pharray(0, NULL), 0, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
+  0, pharray(0, NULL), 0, NULL, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
 })
 
 typedef struct phddvt {
@@ -471,6 +472,11 @@ static phbox phCombine(phbox a, phbox b) {
 static phbool phIntersect(phbox a, phbox b) {
   return a.left <= b.right && a.right >= b.left &&
     a.bottom <= b.top && a.top >= b.bottom;
+}
+
+static phbool phBoxContain(phbox a, phbox b) {
+  return a.left <= b.left && a.right >= b.right &&
+    a.bottom <= b.bottom && a.top >= b.top;
 }
 
 static phbox phBoxTranslate(phbox a, phv t) {
