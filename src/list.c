@@ -33,9 +33,8 @@ void phDump(phlist *self, void (*freeItem)(void *)) {
 }
 
 phlist * phAppend(phlist *self, void *item) {
-  phlistnode *node;
-  if (self->freeList) {
-    node = self->freeList;
+  phlistnode *node = self->freeList;
+  if (node) {
     self->freeList = self->freeList->next;
   } else {
     node = phAlloc(phlistnode);
@@ -96,9 +95,10 @@ phlist * phInsert(phlist *self, int index, void *item) {
 phlist * phRemove(phlist *self, void *item) {
   phlistnode *node = self->first;
 
-  while (node && node->item != item) {
-    node = node->next;
+  if (!node) {
+    return self;
   }
+  while (node->item != item && (node = node->next)) {}
 
   if (node) {
     if (node->prev) {
