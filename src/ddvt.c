@@ -181,6 +181,12 @@ void _phDdvtToChildren(phddvt *self) {
 void _phDdvtAddIfUnique(phddvt *self, phparticle *particle) {
   phlistiterator _listitr;
   if (!phContains(phIterator(&self->particles, &_listitr), particle)) {
+    if (
+      phBoxContain(self->box, particle->_worldData.oldBox) ||
+        !self->parent
+    ) {
+      particle->_worldData.topDdvt = self;
+    }
     _phDdvtAddLeaf(self, particle);
   }
 }
@@ -202,6 +208,10 @@ void _phDdvtFromChildren(phddvt *self) {
 
 void _phDdvtAdd(phddvt *self, phparticle *particle, phbox *box) {
   self->isSleeping = 0;
+
+  if (phBoxContain(self->box, *box) || !self->parent) {
+    particle->_worldData.topDdvt = self;
+  }
 
   if (!self->tl && self->length < self->maxParticles) {
     _phDdvtAddLeaf(self, particle);
@@ -271,8 +281,57 @@ void phDdvtWake(phddvt *self, phparticle *particle) {
 }
 
 void phDdvtUpdate(phddvt *self, phparticle *particle, phbox old, phbox new) {
-  if (self->tl) {
-    _phDdvtUpdate(self, particle, &old, &new);
+  phddvt *top = particle->_worldData.topDdvt;
+  phddvt *update = top;
+  if (phBoxContain(top->box, new)) {
+    while (top->tl) {
+      phdouble centerY = top->tl->box.bottom;
+      phint topContain = centerY <= new.bottom;
+      if (topContain) {
+        phdouble centerX = top->tl->box.right;
+        phint leftContain = centerX >= new.right;
+        if (leftContain) {
+          top = top->tl;
+          continue;
+        }
+        phint rightContain = centerX <= new.left;
+        if (rightContain) {
+          top = top->tr;
+          continue;
+        }
+        // Contained in the top, between left and right. Not possible to be in
+        // bottom so go ahead and break.
+        break;
+      }
+      phint bottomContain = centerY >= new.top;
+      if (bottomContain) {
+        phdouble centerX = top->tl->box.right;
+        phint leftContain = centerX >= new.right;
+        if (leftContain) {
+          top = top->bl;
+          continue;
+        }
+        phint rightContain = centerX <= new.left;
+        if (rightContain) {
+          top = top->br;
+          continue;
+        }
+      }
+      break;
+    }
+  } else {
+    while (top->parent) {
+      top = top->parent;
+      if (phBoxContain(top->box, new)) {
+        break;
+      }
+    }
+    update = top;
+  }
+  particle->_worldData.topDdvt = top;
+
+  if (update->tl) {
+    _phDdvtUpdate(update, particle, &old, &new);
   }
 }
 
