@@ -62,9 +62,16 @@ void phWorldInternalStep(phworld *self) {
   // test and unsleep
   phddvtpairiterator _ditr;
   itr = phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
+  phlistiterator *leafItr1 = &_ditr.leafItr1;
+  phlistiterator *leafItr2 = &_ditr.leafItr2;
+  phparticle *a;
+  if (leafItr1->node) {
+    a = leafItr1->node->item;
+  }
   // Most common DdvtPair next case is to iterate the second leaf itr.
   while (
-    phListNext(&_ditr.leafItr2) || phDdvtPairNext((phddvtpairiterator *) itr)
+    phListNext(leafItr2) ||
+      (phDdvtPairNext((phddvtpairiterator *) itr) && (a = leafItr1->node->item))
   ) {
     phcollision *nextCollision = _phWorldNextCollision(self);
 
@@ -75,8 +82,7 @@ void phWorldInternalStep(phworld *self) {
 
     // Deref takes care to make sure you can. Since we are in loop we can
     // confirm that we can access leaf1 and leaf2.
-    phparticle *a = _ditr.leafItr1.node->item;
-    phparticle *b = _ditr.leafItr2.node->item;
+    phparticle *b = leafItr2->node->item;
 
     // Pre test with boxes, which is cheaper than circle test. Then circle test.
     if (
