@@ -513,6 +513,7 @@ void phDump(phlist *, void (*freeFn)(void *));
 phlist * phAppend(phlist *, void *);
 phlist * phInsert(phlist *, int index, void *);
 phlist * phRemove(phlist *, void *);
+void * phShift(phlist *);
 
 #define phlistiterator(list, node) ((phlistiterator) { \
   (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
