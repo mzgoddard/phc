@@ -285,17 +285,39 @@ void phDdvtUpdate(phddvt *self, phparticle *particle, phbox old, phbox new) {
   phddvt *update = top;
   if (phBoxContain(top->box, new)) {
     while (top->tl) {
-      if (phBoxContain(top->tl->box, new)) {
-        top = top->tl;
-      } else if (phBoxContain(top->tr->box, new)) {
-        top = top->tr;
-      } else if (phBoxContain(top->bl->box, new)) {
-        top = top->bl;
-      } else if (phBoxContain(top->br->box, new)) {
-        top = top->br;
-      } else {
+      phdouble centerY = top->tl->box.bottom;
+      phint topContain = centerY <= new.bottom;
+      if (topContain) {
+        phdouble centerX = top->tl->box.right;
+        phint leftContain = centerX >= new.right;
+        if (leftContain) {
+          top = top->tl;
+          continue;
+        }
+        phint rightContain = centerX <= new.left;
+        if (rightContain) {
+          top = top->tr;
+          continue;
+        }
+        // Contained in the top, between left and right. Not possible to be in
+        // bottom so go ahead and break.
         break;
       }
+      phint bottomContain = centerY >= new.top;
+      if (bottomContain) {
+        phdouble centerX = top->tl->box.right;
+        phint leftContain = centerX >= new.right;
+        if (leftContain) {
+          top = top->bl;
+          continue;
+        }
+        phint rightContain = centerX <= new.left;
+        if (rightContain) {
+          top = top->br;
+          continue;
+        }
+      }
+      break;
     }
   } else {
     while (top->parent) {
