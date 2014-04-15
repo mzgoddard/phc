@@ -213,8 +213,12 @@ typedef struct phparticle {
     struct phparticle *, struct phparticle *, struct phcollision *
   );
 
-  phparticleworlddata *_worldData;
+  phparticleworlddata _worldData;
 } phparticle;
+
+#define phparticleworlddata(oldBox) ((phparticleworlddata) { \
+  0, pharray(0, NULL), 0, NULL, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
+})
 
 #define phparticle(pos) ((phparticle) { \
   pos, pos, phZero(), \
@@ -222,11 +226,7 @@ typedef struct phparticle {
   0, 0, 0, phlist(), \
   ~0, ~0, \
   NULL, NULL, \
-  NULL \
-})
-
-#define phparticleworlddata(oldBox) ((phparticleworlddata) { \
-  0, pharray(0, NULL), 0, NULL, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
+  phparticleworlddata(phbox(0, 0, 0, 0)) \
 })
 
 typedef struct phddvt {

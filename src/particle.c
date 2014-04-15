@@ -49,18 +49,18 @@ void phIntegrate(phparticle *self, phdouble dt) {
 }
 
 void phTestReset(phparticle *self) {
-  // phClean(&self->_worldData->collideWith, NULL);
-  self->_worldData->collideWithIndex = 0;
+  // phClean(&self->_worldData.collideWith, NULL);
+  self->_worldData.collideWithIndex = 0;
 }
 
 static phbool _phHasCollidedAlready(phparticle *self, phparticle *other) {
   // return phStaticContains(
   //   (phiteratornext) phListNext, (phiteratorderef) phListDeref,
-  //   phIterator(&self->_worldData->collideWith, &_listitr),
+  //   phIterator(&self->_worldData.collideWith, &_listitr),
   //   other
   // );
-  for (phint i = 0; i < self->_worldData->collideWithIndex; ++i) {
-    if (self->_worldData->collideWith.items[i] == other) {
+  for (phint i = 0; i < self->_worldData.collideWithIndex; ++i) {
+    if (self->_worldData.collideWith.items[i] == other) {
       return 1;
     }
   }
@@ -77,10 +77,10 @@ static phbool _phIgnoresOther(phparticle *self, void *other) {
 }
 
 static void _phAckCollision(phparticle *self, phparticle *other) {
-  if (self->_worldData) {
-    // phAppend(&self->_worldData->collideWith, other);
-    pharray *array = &self->_worldData->collideWith;
-    if (array->capacity == self->_worldData->collideWithIndex) {
+  // if (self->_worldData) {
+    // phAppend(&self->_worldData.collideWith, other);
+    pharray *array = &self->_worldData.collideWith;
+    if (array->capacity == self->_worldData.collideWithIndex) {
       void **oldItems = array->items;
       array->items = calloc(array->capacity + 32, sizeof(phparticle *));
       for (phint i = 0; i < array->capacity; ++i) {
@@ -90,8 +90,8 @@ static void _phAckCollision(phparticle *self, phparticle *other) {
       free(oldItems);
     }
 
-    array->items[self->_worldData->collideWithIndex++] = other;
-  }
+    array->items[self->_worldData.collideWithIndex++] = other;
+  // }
 }
 
 phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
@@ -118,7 +118,7 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
 
   ingress = abx*abx+aby*aby;
   if (((ingress < abr*abr))) {
-    if (self->_worldData && _phHasCollidedAlready(self, other)) {
+    if (_phHasCollidedAlready(self, other)) {
       return 0;
     }
 

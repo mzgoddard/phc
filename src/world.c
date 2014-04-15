@@ -44,7 +44,7 @@ void phWorldInternalStep(phworld *self) {
   itr = phIterator(&self->particles, &_litr);
   while (phListNext((phlistiterator *) itr)) {
     phparticle *particle = phListDeref((phlistiterator *) itr);
-    oldBox = particle->_worldData->oldBox;
+    oldBox = particle->_worldData.oldBox;
     phIntegrate(particle, self->timing.dt);
     phTestReset(particle);
     // Update particle in ddvt
@@ -54,7 +54,7 @@ void phWorldInternalStep(phworld *self) {
     ) {
       newBox = phAabb(particle->position, particle->radius);
       phDdvtUpdate(&self->_optimization.ddvt, particle, oldBox, newBox);
-      particle->_worldData->oldBox = newBox;
+      particle->_worldData.oldBox = newBox;
     }
     // If velocity is below threshold, increment counter to sleep
   }
@@ -80,7 +80,7 @@ void phWorldInternalStep(phworld *self) {
 
     // Pre test with boxes, which is cheaper than circle test. Then circle test.
     if (
-      phIntersect(a->_worldData->oldBox, b->_worldData->oldBox) &&
+      phIntersect(a->_worldData.oldBox, b->_worldData.oldBox) &&
         phTest(a, b, nextCollision)
     ) {
       nextCollision->a = a;
@@ -145,8 +145,8 @@ void phWorldStep(phworld *self, phdouble dt) {
 // phiterator * phWorldBoxIterator(phworld *, phbox, phboxiterator *);
 
 phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
-  particle->_worldData = phAlloc(phparticleworlddata);
-  *(particle->_worldData) =
+  // particle->_worldData = phAlloc(phparticleworlddata);
+  particle->_worldData =
     phparticleworlddata(phAabb(particle->position, particle->radius));
   phAppend(&self->particles, particle);
   phDdvtAdd(&self->_optimization.ddvt, particle);
@@ -154,12 +154,12 @@ phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
 }
 
 phworld * phWorldRemoveParticle(phworld *self, phparticle *particle) {
-  phbox oldBox = particle->_worldData->oldBox;
+  phbox oldBox = particle->_worldData.oldBox;
   phDdvtRemove(&self->_optimization.ddvt, particle, oldBox);
   phRemove(&self->particles, particle);
-  phParticleWorldDataDump(particle->_worldData);
-  phFree(particle->_worldData);
-  particle->_worldData = NULL;
+  phParticleWorldDataDump(&particle->_worldData);
+  // phFree(particle->_worldData);
+  // particle->_worldData = NULL;
   return self;
 }
 
