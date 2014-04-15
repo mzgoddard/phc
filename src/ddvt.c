@@ -336,47 +336,51 @@ void phDdvtUpdate(phddvt *self, phparticle *particle, phbox old, phbox new) {
 }
 
 static void _phDdvtNextChild(phddvtiterator *self) {
-  if (!self->leafItr.list) {
-    phddvt *ddvt = self->ddvt;
-    phddvt *parent = ddvt ? ddvt->parent : NULL;
-    phbool next = 0;
-    if (parent) {
-      for (
-        phddvt **child = parent->children,
-          **end = parent->children + 3;
-        child < end;
-        ++child
-      ) {
-        if (ddvt == *child) {
-          ddvt = child[1];
-          while (ddvt->tl) {
-            ddvt = ddvt->tl;
-          }
-          self->ddvt = ddvt;
-          next = 1;
-          break;
+  phddvt *ddvt = self->ddvt;
+  phddvt *parent = ddvt ? ddvt->parent : NULL;
+  if (parent) {
+    for (
+      phddvt **child = parent->children,
+        **end = parent->children + 3;
+      child < end;
+      ++child
+    ) {
+      if (ddvt == *child) {
+        ddvt = child[1];
+        while (ddvt->tl) {
+          ddvt = ddvt->tl;
         }
+        self->ddvt = ddvt;
+        return;
       }
     }
-    if (!next) {
-      self->ddvt = parent;
-    }
   }
+  // No sibling ddvt, bump up a level.
+  self->ddvt = parent;
 }
 
 phbool phDdvtNext(phddvtiterator *self) {
+  if (self->ddvt == self->topDdvt) {
+    return 0;
+  }
   phbool next = 0;
-  while (!next && self->ddvt != self->topDdvt) {
-    // if parent, iterate over tl, then tr, bl, br
-    _phDdvtNextChild((phddvtiterator *) self);
-    // if leaf, iterate over particles
-    if (self->ddvt && !self->ddvt->tl) {
-      if (self->leafItr.list != &self->ddvt->particles) {
-        phIterator(&self->ddvt->particles, &self->leafItr);
-      }
+  while (!next) {
+    if (self->leafItr.list) {
       next = phListNext(&self->leafItr);
       if (!next) {
         self->leafItr.list = NULL;
+      }
+    } else {
+      // if parent, iterate over tl, then tr, bl, br
+      _phDdvtNextChild((phddvtiterator *) self);
+      if (self->ddvt == self->topDdvt) {
+        break;
+      }
+      // if leaf, iterate over particles
+      if (self->ddvt && !self->ddvt->tl) {
+        if (self->leafItr.list != &self->ddvt->particles) {
+          phIterator(&self->ddvt->particles, &self->leafItr);
+        }
       }
     }
   }
@@ -404,24 +408,15 @@ phiterator * phDdvtIterator(phddvt *self, phddvtiterator *itr) {
 }
 
 phbool phDdvtPairNext(phddvtpairiterator *self) {
+  if (self->ddvt == self->topDdvt) {
+    return 0;
+  }
   phbool next = 0;
   phlistiterator *leafItr1 = &self->leafItr1;
   phlistiterator *leafItr2 = &self->leafItr2;
-  while (!next && self->ddvt != self->topDdvt) {
-    // if parent, iterate over tl, then tr, bl, br
-    _phDdvtNextChild((phddvtiterator *) self);
-    // if leaf, iterate over particles
-    phddvt *ddvt = self->ddvt;
-    if (ddvt && !ddvt->tl) {
-      // init the iterators, i = 0, j = i + 1
-      if (leafItr1->list != &ddvt->particles) {
-        phlist *particles = &ddvt->particles;
-        // phIterator(&self->ddvt->particles, &self->leafItr1);
-        leafItr1->list = particles;
-        // phListNext(&self->leafItr1);
-        leafItr1->node = particles->first;
-        leafItr2->node = leafItr1->node;
-      }
+  while (!next) {
+    // step j and i if possible
+    if (leafItr1->list) {
       // step j
       next = phListNext(leafItr2);
       if (!next) {
@@ -432,10 +427,30 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
           leafItr2->node = leafItr1->node;
           next = phListNext(leafItr2);
         }
+        // reached the end of this volume, set i = NULL
+        if (!next) {
+          leafItr1->list = NULL;
+        }
       }
-      // reached the end of this volume, set i = NULL
-      if (!next) {
-        leafItr1->list = NULL;
+    } else {
+      // if parent, iterate over tl, then tr, bl, br
+      _phDdvtNextChild((phddvtiterator *) self);
+      phddvt *ddvt = self->ddvt;
+      if (ddvt == self->topDdvt) {
+        break;
+      }
+      // if leaf, iterate over particles
+      if (ddvt && !ddvt->tl) {
+        // init the iterators, i = 0, j = i + 1
+        if (leafItr1->list != &ddvt->particles) {
+          phlist *particles = &ddvt->particles;
+          // phIterator(&self->ddvt->particles, &self->leafItr1);
+          leafItr1->list = particles;
+          // phListNext(&self->leafItr1);
+          leafItr1->node = particles->first;
+          leafItr2->node = leafItr1->node;
+          next = phListNext(leafItr2);
+        }
       }
     }
   }
