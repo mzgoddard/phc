@@ -84,12 +84,12 @@ void phWorldInternalStep(phworld *self) {
 
         // Pre test with boxes, which is cheaper than circle test. Then circle test.
         if (
-          phIntersect(a->_worldData->oldBox, b->_worldData->oldBox) &&
+          phIntersect(a->_worldData.oldBox, b->_worldData.oldBox) &&
             phTest(a, b, nextCollision)
         ) {
           nextCollision->a = a;
           nextCollision->b = b;
-          _phWorldSaveCollision(self, nextCollision);
+          _phWorldSaveCollision(self);
         }
       } while (phListNext(&_ditr.leafItr2));
     } while (phListNext(&_ditr.leafItr1));
