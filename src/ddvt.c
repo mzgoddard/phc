@@ -412,24 +412,24 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
     return 0;
   }
   phbool next = 0;
-  phlistiterator *leafItr1 = &self->leafItr1;
-  phlistiterator *leafItr2 = &self->leafItr2;
+  pharrayiterator *arrayItr1 = &self->arrayItr1;
+  pharrayiterator *arrayItr2 = &self->arrayItr2;
   while (!next) {
     // step j and i if possible
-    if (leafItr1->list) {
+    if (arrayItr1->test) {
       // step j
-      next = phListNext(leafItr2);
+      next = phArrayNext(arrayItr2);
       if (!next) {
         // step i
-        next = phListNext(leafItr1);
+        next = phArrayNext(arrayItr1);
         // if there is still more, set j = i + 1
         if (next) {
-          leafItr2->node = leafItr1->node;
-          next = phListNext(leafItr2);
+          arrayItr2->items = arrayItr1->items;
+          next = phArrayNext(arrayItr2);
         }
         // reached the end of this volume, set i = NULL
         if (!next) {
-          leafItr1->list = NULL;
+          arrayItr1->test = 0;
         }
       }
     } else {
@@ -442,15 +442,23 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
       // if leaf, iterate over particles
       if (ddvt && !ddvt->tl) {
         // init the iterators, i = 0, j = i + 1
-        if (leafItr1->list != &ddvt->particles) {
-          phlist *particles = &ddvt->particles;
-          // phIterator(&self->ddvt->particles, &self->leafItr1);
-          leafItr1->list = particles;
-          // phListNext(&self->leafItr1);
-          leafItr1->node = particles->first;
-          leafItr2->node = leafItr1->node;
-          next = phListNext(leafItr2);
+        pharray *particles = &self->particles;
+        // particles->capacity = 512;
+        // phIterator(&ddvt->particles, &self->leafItr1);
+        // phUnsafeToArray(&self->leafItr1.iterator, particles);
+        phlistnode *node = ddvt->particles.first;
+        void **items = particles->items;
+        for (; node; node = node->next, ++items) {
+          *items = node->item;
         }
+        particles->capacity = ddvt->particles.length;
+        arrayItr1->items = particles->items;
+        arrayItr1->end = particles->items + particles->capacity;
+        arrayItr1->test = 1;
+        arrayItr2->items = arrayItr1->items;
+        arrayItr2->end = arrayItr1->end;
+        next = phArrayNext(arrayItr2);
+        // }
       }
     }
   }
@@ -458,9 +466,12 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
 }
 
 void * phDdvtPairDeref(phddvtpairiterator *self) {
-  if (self->leafItr1.list) {
-    self->pair.a = phListDeref(&self->leafItr1);
-    self->pair.b = phListDeref(&self->leafItr2);
+  // if (self->leafItr1.list) {
+  if (self->arrayItr1.test) {
+    // self->pair.a = phListDeref(&self->leafItr1);
+    // self->pair.b = phListDeref(&self->leafItr2);
+    self->pair.a = phArrayDeref(&self->arrayItr1);
+    self->pair.b = phArrayDeref(&self->arrayItr2);
     return &self->pair;
   }
   return NULL;
@@ -475,8 +486,19 @@ phiterator * phDdvtPairIterator(phddvt *self, phddvtpairiterator *itr) {
   while (itr->ddvt->tl) {
     itr->ddvt = itr->ddvt->tl;
   }
-  phIterator(&itr->ddvt->particles, &itr->leafItr1);
-  phListNext(&itr->leafItr1);
-  itr->leafItr2 = itr->leafItr1;
+  itr->particles = pharray(512, (void **) &itr->_particles._items);
+  // phIterator(&itr->ddvt->particles, &itr->leafItr1);
+  // phUnsafeToArray(&itr->leafItr1.iterator, &itr->particles);
+  phlistnode *node = itr->ddvt->particles.first;
+  void **items = itr->particles.items;
+  for (; node; node = node->next, ++items) {
+    *items = node->item;
+  }
+  itr->particles.capacity = itr->ddvt->particles.length;
+  phArrayIterator(&itr->particles, &itr->arrayItr1);
+  phArrayNext(&itr->arrayItr1);
+  // phListNext(&itr->leafItr1);
+  // itr->leafItr2 = itr->leafItr1;
+  itr->arrayItr2 = itr->arrayItr1;
   return (phiterator *) itr;
 }
