@@ -93,13 +93,23 @@ def build(bld):
         install_path=None
     )
 
+    bld.program(
+        source=bld.path.ant_glob('example/simple/*.c example/bench/*.c'),
+        includes='src',
+        target='ph-stress',
+        lib='m',
+        use='ph',
+        install_path=None
+    )
+
     # Build sdl example if it was able to configure.
     if 'sdl' in bld.all_envs and not bld.all_envs['sdl']['DISABLED']:
         bld.env = bld.all_envs['sdl']
 
         bld.program(
-            source=bld.path.ant_glob('example/sdl/*.c'),
+            source=bld.path.ant_glob('example/simple/*.c example/sdl/*.c'),
             includes='src',
+            defines='FRAMESTATS=1',
             target='sdl-example',
             lib='m',
             framework=['Cocoa', 'OpenGL'],
