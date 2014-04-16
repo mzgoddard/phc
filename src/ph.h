@@ -159,19 +159,19 @@ typedef struct pharray {
 })
 
 typedef struct pharrayiterator {
-  void *_value1;
-  void *_value2;
-  void **_value3;
-  void **_value4;
-  phbool _value5;
-} pharrayiterator;
-
-typedef struct _pharrayiterator {
   phiterator iterator;
   void **items;
   void **end;
   phbool test;
-} _pharrayiterator;
+} pharrayiterator;
+
+#define _pharrayiterator pharrayiterator
+// typedef struct _pharrayiterator {
+//   phiterator iterator;
+//   void **items;
+//   void **end;
+//   phbool test;
+// } _pharrayiterator;
 
 #define pharrayiterator(array) ((pharrayiterator) { \
   (phiteratornext) phArrayNext, (phiteratorderef) phArrayDeref, \
@@ -285,6 +285,16 @@ typedef struct phddvtpairiterator {
   phlistiterator leafItr1;
   phlistiterator leafItr2;
   phddvtpair pair;
+  pharrayiterator arrayItr1;
+  pharrayiterator arrayItr2;
+  union {
+    struct {
+      phint capacity;
+      void **items;
+      void *_items[512];
+    } _particles;
+    pharray particles;
+  };
 } phddvtpairiterator;
 
 #define phddvtpairiterator(ddvt) ((phddvtpairiterator) { \
@@ -292,7 +302,10 @@ typedef struct phddvtpairiterator {
   ddvt->parent, ddvt, \
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-  NULL, NULL \
+  NULL, NULL, \
+  NULL, NULL, NULL, NULL, 0, \
+  NULL, NULL, NULL, NULL, 0, \
+  0, NULL \
 })
 
 typedef struct phworld {
@@ -604,12 +617,30 @@ phbool phContains(phiterator *, void *);
 void * phGetIndex(phiterator *, phint);
 phbool phSame(void *ctx, void *item);
 
-pharray * phToArray(phiterator *, pharray *);
+static pharray * phToArray(phiterator *self, pharray *ary) {
+  phint i = 0;
+  phint capacity = ary->capacity;
+  void **items = ary->items;
+  phiteratornext next = self->next;
+  phiteratorderef deref = self->deref;
+  for (; i < capacity && next(self); ++i, ++items) {
+    *items = deref(self);
+  }
+  return ary;
+}
+
+static pharray * phUnsafeToArray(phiterator *self, pharray *ary) {
+  void **items = ary->items;
+  phiteratornext next = self->next;
+  phiteratorderef deref = self->deref;
+  for (; next(self); ++items) {
+    *items = deref(self);
+  }
+  return ary;
+}
 
 static phbool phArrayNext(_pharrayiterator *self) {
-  self->items++;
-  self->test = self->items < self->end;
-  return self->test;
+  return self->test = ++self->items < self->end;
 }
 
 static void * phArrayDeref(_pharrayiterator *self) {
