@@ -17,16 +17,19 @@ void phDdvtDump(phddvt *self) {
     phFree(self->br); self->br = NULL;
   }
   phDump(&self->particles, NULL);
+  phFree(self->_particleArray.items);
 }
 
 void _phDdvtAddLeaf(phddvt *self, phparticle *particle) {
-  phAppend(&self->particles, particle);
+  phPrepend(&self->particles, particle);
   self->length++;
+  self->_dirtyParticles++;
 }
 
 void _phDdvtRemoveLeaf(phddvt *self, phparticle *particle) {
   phRemove(&self->particles, particle);
   self->length--;
+  self->_dirtyParticles = self->length;
 }
 
 void _phDdvtUpdateLeaf(
@@ -359,6 +362,34 @@ static void _phDdvtNextChild(phddvtiterator *self) {
   self->ddvt = parent;
 }
 
+static void _phDdvtCheckParticleArray(phddvt *self) {
+  if (self->_dirtyParticles) {
+    if (!self->_particleArray.items) {
+      self->_particleArray = pharray(self->length, calloc(512, sizeof(phparticle *)));
+      self->_dirtyParticles = self->length;
+    }
+    phint newParticles = self->_dirtyParticles;
+    // phint newParticles = self->length;
+    // void **items = self->_particleArray.items + self->length - newParticles;
+    void **items = self->_particleArray.items;
+    for (
+      phint i = self->_particleArray.capacity - 1, j = self->length - 1;
+      j >= newParticles;
+      --i, --j
+    ) {
+      items[j] = items[i];
+    }
+    phlistnode *node = self->particles.first;
+    // for (phint i = newParticles - 1; node && i; --i, node = node->prev) {}
+    // for (phint i = self->length - newParticles; node && i; --i, node = node->next) {}
+    for (; node && newParticles >= 0; node = node->next, ++items, --newParticles) {
+      *items = node->item;
+    }
+    self->_particleArray.capacity = self->particles.length;
+    self->_dirtyParticles = 0;
+  }
+}
+
 phbool phDdvtNext(phddvtiterator *self) {
   if (self->ddvt == self->topDdvt) {
     return 0;
@@ -446,17 +477,20 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
         // particles->capacity = 512;
         // phIterator(&ddvt->particles, &self->leafItr1);
         // phUnsafeToArray(&self->leafItr1.iterator, particles);
-        phlistnode *node = ddvt->particles.first;
-        void **items = particles->items;
-        for (; node; node = node->next, ++items) {
-          *items = node->item;
-        }
-        particles->capacity = ddvt->particles.length;
+        // phlistnode *node = ddvt->particles.first;
+        // void **items = particles->items;
+        // for (; node; node = node->next, ++items) {
+        //   *items = node->item;
+        // }
+        // particles->capacity = ddvt->particles.length;
+        _phDdvtCheckParticleArray(ddvt);
+        *particles = ddvt->_particleArray;
         arrayItr1->items = particles->items;
         arrayItr1->end = particles->items + particles->capacity;
         arrayItr1->test = 1;
         arrayItr2->items = arrayItr1->items;
         arrayItr2->end = arrayItr1->end;
+        arrayItr2->test = 1;
         next = phArrayNext(arrayItr2);
         // }
       }
@@ -486,15 +520,17 @@ phiterator * phDdvtPairIterator(phddvt *self, phddvtpairiterator *itr) {
   while (itr->ddvt->tl) {
     itr->ddvt = itr->ddvt->tl;
   }
-  itr->particles = pharray(512, (void **) &itr->_particles._items);
+  // itr->particles = pharray(512, (void **) &itr->_particles._items);
   // phIterator(&itr->ddvt->particles, &itr->leafItr1);
   // phUnsafeToArray(&itr->leafItr1.iterator, &itr->particles);
-  phlistnode *node = itr->ddvt->particles.first;
-  void **items = itr->particles.items;
-  for (; node; node = node->next, ++items) {
-    *items = node->item;
-  }
-  itr->particles.capacity = itr->ddvt->particles.length;
+  // phlistnode *node = itr->ddvt->particles.first;
+  // void **items = itr->particles.items;
+  // for (; node; node = node->next, ++items) {
+  //   *items = node->item;
+  // }
+  // itr->particles.capacity = itr->ddvt->particles.length;
+  _phDdvtCheckParticleArray(itr->ddvt);
+  itr->particles = itr->ddvt->_particleArray;
   phArrayIterator(&itr->particles, &itr->arrayItr1);
   phArrayNext(&itr->arrayItr1);
   // phListNext(&itr->leafItr1);

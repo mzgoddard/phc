@@ -233,6 +233,8 @@ typedef struct phddvt {
   phbox box;
   phlist particles;
   phint length;
+  pharray _particleArray;
+  phint _dirtyParticles;
   phint minParticles;
   phint maxParticles;
   phbool isSleeping;
@@ -259,7 +261,7 @@ typedef struct phddvtpair {
 } phddvtpair;
 
 #define phddvt(parent, box, min, max) ((phddvt) { \
-  box, phlist(), 0, min, max, 0, \
+  box, phlist(), 0, pharray(0, NULL), 1, min, max, 0, \
   parent, NULL, NULL, NULL, NULL \
 })
 
@@ -524,8 +526,10 @@ static phbox phBR(phbox box) {
 
 void phDump(phlist *, void (*freeFn)(void *));
 phlist * phAppend(phlist *, void *);
+phlist * phPrepend(phlist *, void *);
 phlist * phInsert(phlist *, int index, void *);
 phlist * phRemove(phlist *, void *);
+phlist * phRemoveLast(phlist *, void *);
 void * phShift(phlist *);
 
 #define phlistiterator(list, node) ((phlistiterator) { \

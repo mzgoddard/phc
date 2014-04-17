@@ -53,6 +53,27 @@ phlist * phAppend(phlist *self, void *item) {
   return self;
 }
 
+phlist * phPrepend(phlist *self, void *item) {
+  phlistnode *node = self->freeList;
+  if (node) {
+    self->freeList = self->freeList->next;
+  } else {
+    node = phAlloc(phlistnode);
+  }
+
+  *node = phlistnode(self->first, NULL, item);
+
+  if (!self->last) {
+    self->last = node;
+  } else {
+    self->first->prev = node;
+  }
+  self->first = node;
+
+  self->length++;
+  return self;
+}
+
 phlist * phInsert(phlist *self, int index, void *item) {
   if (index >= self->length) {
     return phAppend(self, item);
@@ -99,6 +120,36 @@ phlist * phRemove(phlist *self, void *item) {
     return self;
   }
   while (node->item != item && (node = node->next)) {}
+
+  if (node) {
+    if (node->prev) {
+      node->prev->next = node->next;
+    } else {
+      self->first = node->next;
+    }
+
+    if (node->next) {
+      node->next->prev = node->prev;
+    } else {
+      self->last = node->prev;
+    }
+
+    node->next = self->freeList;
+    self->freeList = node;
+
+    self->length--;
+  }
+
+  return self;
+}
+
+phlist * phRemoveLast(phlist *self, void *item) {
+  phlistnode *node = self->last;
+
+  if (!node) {
+    return self;
+  }
+  while (node->item != item && (node = node->prev)) {}
 
   if (node) {
     if (node->prev) {
