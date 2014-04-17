@@ -4,7 +4,7 @@
 #define ddvtdata() \
   phparticle particles[8]; \
   phddvt ddvt = phddvt(NULL, phbox(-4, 4, 4, -4), 2, 4); \
-  for (phint i = 0; i < 8; ++i) { \
+  for (phint i = 7; i >= 0; --i) { \
     particles[i] = phparticle(phv((i % 2) * 4 - 2, (i / 2 % 2) * -4 + 2)); \
     phparticle *p = &particles[i]; \
     particles[i]._worldData.oldBox = phAabb(p->position, p->radius); \
@@ -77,7 +77,7 @@ void test_ddvt() {
       ok(phDeref(itr) != NULL, "iterator points to an object");
       // 0, 1
       ok(
-        phDeref(itr) == &particles[count],
+        phDeref(itr) == &particles[1-count],
         "points at expected particle (index %d)",
         count
       );
@@ -113,6 +113,11 @@ void test_ddvt() {
     phiterator *itr = phDdvtPairIterator(&ddvt, &ddvtitr);
     phint count = 0;
     while (phNext(itr)) {
+      ok(ddvtitr.ddvt->_particleArray.capacity == 2, "array is length 2");
+      ok(ddvtitr.particles.capacity == 2, "array is length 2");
+      ok(ddvtitr.arrayItr2.items < ddvtitr.arrayItr2.end);
+      ok(ddvtitr.arrayItr2.test);
+      ok(ddvtitr.arrayItr2.items == ddvtitr.particles.items + 1, "itr2 points");
       phddvtpair *pair = phDeref(itr);
       ok(pair == &ddvtitr.pair, "pair is pointer to static pair iterator");
       if (pair == NULL) {

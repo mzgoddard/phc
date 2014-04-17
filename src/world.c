@@ -62,8 +62,8 @@ void phWorldInternalStep(phworld *self) {
   // test and unsleep
   phddvtpairiterator _ditr;
   itr = phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
-  pharray array = _ditr.particles;
   while (phDdvtPairNext((phddvtpairiterator *) itr)) {
+    pharray array = _ditr.particles;
     phint length = _ditr.ddvt->particles.length;
     for (phint i = 0; i < length; ++i) {
       phparticle *a = array.items[i];
