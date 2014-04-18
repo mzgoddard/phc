@@ -118,6 +118,8 @@ typedef struct phlistnode {
   void *item;
 } phlistnode;
 
+#define phlistnode(next, prev, item) ((phlistnode) { next, prev, item })
+
 typedef struct phlist {
   phlistnode *first, *last, *freeList;
   phint length;
@@ -146,6 +148,11 @@ typedef struct phlistiterator {
 //   phlistnode *node;
 //   phlistnode fakeHead;
 // } _phlistiterator;
+
+#define phlistiterator(list, node) ((phlistiterator) { \
+  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
+  list->first, NULL, NULL \
+})
 
 typedef struct pharray {
   phint capacity;
@@ -525,7 +532,7 @@ static phbox phBR(phbox box) {
 // phList, List functions
 
 void phDump(phlist *, void (*freeFn)(void *));
-phlist * phAppend(phlist *, void *);
+// phlist * phAppend(phlist *, void *);
 phlist * phPrepend(phlist *, void *);
 phlist * phInsert(phlist *, int index, void *);
 phlist * phRemove(phlist *, void *);
@@ -536,6 +543,27 @@ void * phShift(phlist *);
   (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
   list->first, NULL, NULL \
 })
+  
+static phlist * phAppend(phlist *self, void *item) {
+  phlistnode *node = self->freeList;
+  if (node) {
+    self->freeList = self->freeList->next;
+  } else {
+    node = phAlloc(phlistnode);
+  }
+
+  *node = phlistnode(NULL, self->last, item);
+
+  if (!self->first) {
+    self->first = node;
+  } else {
+    self->last->next = node;
+  }
+  self->last = node;
+
+  self->length++;
+  return self;
+}
 
 static void phClean(phlist *self, void (*freeItem)(void *)) {
   if (!freeItem) {
