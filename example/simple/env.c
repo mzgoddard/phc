@@ -7,9 +7,18 @@
 phworld *world;
 static phv gravity;
 
+unsigned int (*getTicks)() = NULL;
+
 void init() {
-  phv viewportSize = phv(640, 480);
-  world = phCreate(phworld, phbox(0, 480, 640, 0));
+  int startTime = 0;
+  int endTime = 0;
+
+  if ( getTicks ) {
+    startTime = getTicks();
+  }
+
+  phv viewportSize = phv(640, 640);
+  world = phCreate(phworld, phbox(0, viewportSize.y, viewportSize.x, 0));
   world->timing.maxSubSteps = 1;
   gravity = phv(0, -0.01 / kFrameStep / kFrameStep);
 
@@ -31,6 +40,14 @@ void init() {
     }
     phWorldAddParticle(world, particle);
   }
+
+  if ( getTicks ) {
+    endTime = getTicks();
+  }
+
+  #ifdef FRAMESTATS
+  printf("init %dms\n", endTime - startTime);
+  #endif
 }
 
 void setWaterTestGravity(float _gravity[3]) {
@@ -39,11 +56,11 @@ void setWaterTestGravity(float _gravity[3]) {
   // printf("%f %f %f\n", gravity[0], gravity[1], gravity[2]);
 }
 
-void gravityIterator(void *ctx, phparticle *particle) {
+static void gravityIterator(void *ctx, phparticle *particle) {
   particle->acceleration = phAdd(particle->acceleration, gravity);
 }
 
-void containIterator(phworld *world, phparticle *particle) {
+static void containIterator(phworld *world, phparticle *particle) {
   phbox box = world->_optimization.box;
   phv p = particle->position;
   phv lp = particle->lastPosition;
@@ -51,23 +68,25 @@ void containIterator(phworld *world, phparticle *particle) {
   if (p.x + r > box.right) {
     lp.x = (p.x - lp.x) * 0.5 + lp.x;
     p.x = box.right - r;
-  }
-  if (p.x - r < box.left) {
+  } else if (p.x - r < box.left) {
     lp.x = (p.x - lp.x) * 0.5 + lp.x;
     p.x = box.left + r;
   }
   if (p.y + r > box.top) {
     lp.y = (p.y - lp.y) * 0.5 + lp.y;
     p.y = box.top - r;
-  }
-  if (p.y - r < box.bottom) {
+  } else if (p.y - r < box.bottom) {
     lp.y = (p.y - lp.y) * 0.5 + lp.y;
     p.y = box.bottom + r;
   }
   particle->position = p;
 }
 
-unsigned int (*getTicks)() = NULL;
+static void gravityContainHandle(phworld *world, phparticle *particle) {
+  gravityIterator(NULL, particle);
+  containIterator(world, particle);
+}
+
 void setGetTicksFunction(unsigned int (*_getTicks)()) {
   getTicks = _getTicks;
 }
@@ -155,9 +174,12 @@ void step(float dt) {
     frames++;
     phlistiterator _litr;
     phiterator *itr = phIterator(&world->particles, &_litr);
-    phIterate(itr, (phitrfn) gravityIterator, NULL);
-    itr = phIterator(&world->particles, &_litr);
-    phIterate(itr, (phitrfn) containIterator, world);
+    phStaticIterate(
+      (phiteratornext) phListNext, (phiteratorderef) phListDeref,
+      itr, (phitrfn) gravityContainHandle, world
+    );
+    // itr = phIterator(&world->particles, &_litr);
+    // phIterate(itr, (phitrfn) containIterator, world);
     phWorldInternalStep(world);
     while (hertztime > kFrameFraction) {
       hertztime -= kFrameFraction;

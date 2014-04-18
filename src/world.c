@@ -42,18 +42,24 @@ void phWorldInternalStep(phworld *self) {
   // integrate, sleep, and update ddvt
   phbox oldBox, newBox;
   itr = phIterator(&self->particles, &_litr);
+  phdouble dt = self->timing.dt;
+  phddvt *ddvt = &self->_optimization.ddvt;
   while (phListNext((phlistiterator *) itr)) {
-    phparticle *particle = phListDeref((phlistiterator *) itr);
-    oldBox = particle->_worldData.oldBox;
-    phIntegrate(particle, self->timing.dt);
+    // phparticle *particle = phListDeref((phlistiterator *) itr);
+    phparticle *particle = _litr.node->item;
+    phIntegrate(particle, dt);
     phTestReset(particle);
+    phv position = particle->position;
+    phv oldPosition = particle->_worldData.oldPosition;
+    phdouble radius = particle->radius;
     // Update particle in ddvt
     if (
-      phMag2(phSub(particle->position, phCenter(oldBox))) >
-        particle->radius / 10
+      phMag2(phSub(position, oldPosition)) > radius * radius / 10
     ) {
-      newBox = phAabb(particle->position, particle->radius);
-      phDdvtUpdate(&self->_optimization.ddvt, particle, oldBox, newBox);
+      oldBox = particle->_worldData.oldBox;
+      newBox = phAabb(position, radius);
+      phDdvtUpdate(ddvt, particle, oldBox, newBox);
+      particle->_worldData.oldPosition = position;
       particle->_worldData.oldBox = newBox;
     }
     // If velocity is below threshold, increment counter to sleep
@@ -66,16 +72,18 @@ void phWorldInternalStep(phworld *self) {
     pharray array = _ditr.particles;
     // phint length = _ditr.ddvt->particles.length;
     phint length = _ditr.ddvt->length;
-    for (phint i = 0; i < length; ++i) {
+    for (phint i = 0; length - i; ++i) {
       phparticle *a = array.items[i];
-      for (phint j = i + 1; j < length; ++j) {
+      phbox boxA = a->_worldData.oldBox;
+      for (phint j = i + 1; length - j; ++j) {
         phcollision *nextCollision = _phWorldNextCollision(self);
         phparticle *b = array.items[j];
+        phbox boxB = b->_worldData.oldBox;
 
         // Pre test with boxes, which is cheaper than circle test. Then
         // circle test.
         if (
-          phIntersect(a->_worldData.oldBox, b->_worldData.oldBox) &&
+          phIntersect(boxA, boxB) &&
             phTest(a, b, nextCollision)
         ) {
           nextCollision->a = a;
@@ -90,7 +98,8 @@ void phWorldInternalStep(phworld *self) {
   // solve
   itr = phIterator(&self->_optimization.collisions, &_litr);
   while (phListNext((phlistiterator *) itr)) {
-    phcollision *col = phListDeref((phlistiterator *) itr);
+    // phcollision *col = phListDeref((phlistiterator *) itr);
+    phcollision *col = _litr.node->item;
     phSolve(col->a, col->b, col);
   }
 
@@ -147,6 +156,7 @@ phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
   // particle->_worldData = phAlloc(phparticleworlddata);
   particle->_worldData =
     phparticleworlddata(phAabb(particle->position, particle->radius));
+  particle->_worldData.oldPosition = particle->position;
   phAppend(&self->particles, particle);
   phDdvtAdd(&self->_optimization.ddvt, particle);
   return self;

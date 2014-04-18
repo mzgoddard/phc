@@ -236,6 +236,22 @@ typedef struct phparticle {
   phparticleworlddata(phbox(0, 0, 0, 0)) \
 })
 
+#ifndef PH_DDVT_PARTICLES_JOIN
+#define PH_DDVT_PARTICLES_JOIN self->minParticles
+// TODO: static number here is faster but will fail tests. Need to make tests
+// compile with their own values, (or not tests compile with static).
+// #define PH_DDVT_PARTICLES_JOIN 4
+#endif
+
+#ifndef PH_DDVT_PARTICLES_SUBDIVIDE
+#define PH_DDVT_PARTICLES_SUBDIVIDE self->maxParticles
+// #define PH_DDVT_PARTICLES_SUBDIVIDE 16
+#endif
+
+#ifndef PH_MAX_DDVT_PARTICLES
+#define PH_MAX_DDVT_PARTICLES 256
+#endif
+
 typedef struct phddvt {
   phbox box;
   // phlist particles;
@@ -245,7 +261,7 @@ typedef struct phddvt {
   phint minParticles;
   phint maxParticles;
   phbool isSleeping;
-  void *_particleItems[512];
+  void *_particleItems[PH_MAX_DDVT_PARTICLES];
   struct phddvt *parent;
   union {
     struct phddvt *children[4];
@@ -303,7 +319,7 @@ typedef struct phddvtpairiterator {
     struct {
       phint capacity;
       void **items;
-      void *_items[512];
+      void *_items[PH_MAX_DDVT_PARTICLES];
     } _particles;
     pharray particles;
   };
@@ -354,7 +370,7 @@ typedef struct phworld {
   phlist(), phlist(), \
   1, 20, \
   0, 1 / 60.0, 0, 10, \
-  box, phddvt(NULL, box, 64, 128), phlist(), phlist(), \
+  box, phddvt(NULL, box, 4, 16), phlist(), phlist(), \
   phlist(), phlist(), \
   0 \
 })
@@ -540,7 +556,6 @@ phlist * phPrepend(phlist *, void *);
 phlist * phInsert(phlist *, int index, void *);
 phlist * phRemove(phlist *, void *);
 phlist * phRemoveLast(phlist *, void *);
-void * phShift(phlist *);
 
 #define phlistiterator(list, node) ((phlistiterator) { \
   (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
@@ -566,6 +581,27 @@ static phlist * phAppend(phlist *self, void *item) {
 
   self->length++;
   return self;
+}
+
+static void * phShift(phlist *self) {
+  phlistnode *node = self->first;
+
+  if (node) {
+    if ((self->first = node->next)) {
+      node->next->prev = NULL;
+    } else {
+      self->last = NULL;
+    }
+
+    node->next = self->freeList;
+    self->freeList = node;
+
+    self->length--;
+
+    return node->item;
+  } else {
+    return NULL;
+  }
 }
 
 static void phClean(phlist *self, void (*freeItem)(void *)) {
@@ -623,8 +659,10 @@ static void * phDeref(phiterator *self) {
 }
 
 static void phStaticIterate(
-  phbool (*next)(phiterator *),
-  void * (*deref)(phiterator *),
+  phiteratornext next,
+  phiteratorderef deref,
+  // phbool (*next)(phiterator *),
+  // void * (*deref)(phiterator *),
   phiterator *self,
   phitrfn itr,
   void *ctx

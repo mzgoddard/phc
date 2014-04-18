@@ -52,15 +52,15 @@ void b_fastarrayiterator(void *ctx) {
   phint sum = 0;
   phArrayIterator(ctx, &_arrayitr);
   phStaticIterate(
-    (phbool (*)(phiterator *)) phArrayNext,
-    (void *(*)(phiterator *)) phArrayDeref, (phiterator *) &_arrayitr, (phitrfn) sumReduce, &sum);
+    (phiteratornext) phArrayNext,
+    (phiteratorderef) phArrayDeref, (phiterator *) &_arrayitr, (phitrfn) sumReduce, &sum);
 }
 
 void b_fastlistiterator(void *ctx) {
   phlistiterator _listitr;
   phint sum = 0;
   phIterator(ctx, &_listitr);
-  phStaticIterate((phbool (*)(phiterator *)) phListNext, (void *(*)(phiterator *)) phListDeref, (phiterator *) &_listitr, (phitrfn) sumReduce, &sum);
+  phStaticIterate((phiteratornext) phListNext, (phiteratorderef) phListDeref, (phiterator *) &_listitr, (phitrfn) sumReduce, &sum);
 }
 
 #define ITERATIONDATA \

@@ -22,11 +22,8 @@ void phDdvtDump(phddvt *self) {
 
 void _phDdvtAddLeaf(phddvt *self, phparticle *particle) {
   // phPrepend(&self->particles, particle);
-  if (!self->_particleArray.items) {
-    self->_particleArray.items = (void**) &self->_particleItems;
-  }
   self->_particleArray.items[self->length] = particle;
-  self->length++;
+  ++self->length;
   self->_particleArray.capacity = self->length;
   // self->_dirtyParticles++;
 }
@@ -34,14 +31,13 @@ void _phDdvtAddLeaf(phddvt *self, phparticle *particle) {
 void _phDdvtRemoveLeaf(phddvt *self, phparticle *particle) {
   // phRemove(&self->particles, particle);
   // for (phint i = self->length - 1; i >= 0; --i) {
-  for (phint i = 0, length = self->length; i < length; ++i) {
+  for (phint i = 0, length = self->length; length - i; ++i) {
     if (self->_particleArray.items[i] == particle) {
-      self->_particleArray.items[i] =
-        self->_particleArray.items[self->length - 1];
+      self->_particleArray.items[i] = self->_particleArray.items[length - 1];
       break;
     }
   }
-  self->length--;
+  --self->length;
   self->_particleArray.capacity = self->length;
   // self->_dirtyParticles = self->length;
 }
@@ -180,8 +176,8 @@ void _phDdvtToChildren(phddvt *self) {
     *self->corner = phddvt( \
       self, \
       ph ## CORNER(self->box), \
-      self->minParticles, \
-      self->maxParticles \
+      PH_DDVT_PARTICLES_JOIN, \
+      PH_DDVT_PARTICLES_SUBDIVIDE \
     )
   ALLOC_AND_INIT(tl, TL);
   ALLOC_AND_INIT(tr, TR);
@@ -236,7 +232,15 @@ void _phDdvtAdd(phddvt *self, phparticle *particle, phbox *box) {
     particle->_worldData.topDdvt = self;
   }
 
-  if (!self->tl && self->length < self->maxParticles) {
+  if (!self->tl && self->length < PH_DDVT_PARTICLES_SUBDIVIDE) {
+    if (!self->_particleArray.items) {
+      self->_particleArray.items = (void**) &self->_particleItems;
+    }
+    _phDdvtAddLeaf(self, particle);
+  } else if (
+    !self->tl && self->length >= PH_DDVT_PARTICLES_SUBDIVIDE &&
+    self->parent && self->parent->length < PH_MAX_DDVT_PARTICLES - 2
+  ) {
     _phDdvtAddLeaf(self, particle);
   } else {
     if (!self->tl) {
@@ -253,7 +257,7 @@ void _phDdvtRemove(phddvt *self, phparticle *particle, phbox *box) {
   } else {
     _phDdvtRemoveChild(self, particle, box);
 
-    if (self->length <= self->minParticles) {
+    if (self->length <= PH_DDVT_PARTICLES_JOIN) {
       _phDdvtFromChildren(self);
     }
   }
@@ -284,7 +288,7 @@ void _phDdvtWake(phddvt *self, phparticle *particle, phbox *box) {
 void _phDdvtUpdate(phddvt *self, phparticle *particle, phbox *old, phbox *new) {
   _phDdvtUpdateChild(self, particle, old, new);
 
-  if (self->length <= self->minParticles) {
+  if (self->length <= PH_DDVT_PARTICLES_JOIN) {
     _phDdvtFromChildren(self);
   }
 }
@@ -365,7 +369,7 @@ static void _phDdvtNextChild(phddvtiterator *self) {
     for (
       phddvt **child = parent->children,
         **end = parent->children + 3;
-      child < end;
+      end - child;
       ++child
     ) {
       if (ddvt == *child) {
@@ -385,7 +389,7 @@ static void _phDdvtNextChild(phddvtiterator *self) {
 static void _phDdvtCheckParticleArray(phddvt *self) {
   if (self->_dirtyParticles) {
     if (!self->_particleArray.items) {
-      self->_particleArray = pharray(self->length, calloc(512, sizeof(phparticle *)));
+      self->_particleArray = pharray(self->length, calloc(PH_MAX_DDVT_PARTICLES, sizeof(phparticle *)));
       self->_dirtyParticles = self->length;
     }
     phint newParticles = self->_dirtyParticles;
@@ -501,7 +505,7 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
       if (ddvt && !ddvt->tl) {
         // init the iterators, i = 0, j = i + 1
         pharray *particles = &self->particles;
-        // particles->capacity = 512;
+        // particles->capacity = PH_MAX_DDVT_PARTICLES;
         // phIterator(&ddvt->particles, &self->leafItr1);
         // phUnsafeToArray(&self->leafItr1.iterator, particles);
         // phlistnode *node = ddvt->particles.first;
@@ -547,7 +551,7 @@ phiterator * phDdvtPairIterator(phddvt *self, phddvtpairiterator *itr) {
   while (itr->ddvt->tl) {
     itr->ddvt = itr->ddvt->tl;
   }
-  // itr->particles = pharray(512, (void **) &itr->_particles._items);
+  // itr->particles = pharray(PH_MAX_DDVT_PARTICLES, (void **) &itr->_particles._items);
   // phIterator(&itr->ddvt->particles, &itr->leafItr1);
   // phUnsafeToArray(&itr->leafItr1.iterator, &itr->particles);
   // phlistnode *node = itr->ddvt->particles.first;
