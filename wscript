@@ -8,7 +8,14 @@ def options(ctx):
 
 import waflib.Logs
 def configure(ctx):
+    CC = os.environ['CC']
+    if os.environ['CC'] == 'emcc':
+        del os.environ['CC']
     ctx.load('compiler_c')
+
+    if CC == 'emcc':
+        ctx.env.CC = ['emcc']
+        ctx.env.LINK_CC = ['emcc']
 
     # Last time debugged with clang it created invalid paths in the debug data
     # which lead to missing function debug data for *.c code.
@@ -27,10 +34,19 @@ def configure(ctx):
     # except:
     #     pass
 
-    ctx.env.append_value('CFLAGS', '-g')
-    ctx.env.append_value('CFLAGS', '-O3')
+    # ctx.env.append_value('CFLAGS', '-g')
+    ctx.env.append_value('CFLAGS', '-O3' if CC != 'emcc' else '-O2')
     ctx.env.append_value('CFLAGS', '-std=c99')
-    ctx.env.append_value('LINKFLAGS', '-O4')
+    ctx.env.append_value('LINKFLAGS', '-O4' if CC != 'emcc' else '-O2')
+
+    if CC == 'emcc':
+        ctx.env.append_value('CFLAGS', '-s')
+        ctx.env.append_value('CFLAGS', 'ASM_JS=1')
+        ctx.env.append_value('CFLAGS', '-s')
+        ctx.env.append_value('CFLAGS', 'FUNCTION_POINTER_ALIGNMENT=1')
+        ctx.env.append_value('LINKFLAGS', '-s')
+        ctx.env.append_value('LINKFLAGS', 'ASM_JS=1')
+        ctx.env.cprogram_PATTERN = '%s.js'
 
     ctx.start_msg( 'init submodules' )
     gitStatus = ctx.exec_command( 'git submodule init && git submodule update' )
@@ -59,7 +75,28 @@ def configure(ctx):
     except:
         ctx.env.DISABLED = True
 
+from waflib.TaskGen import after_method,before_method,feature,taskgen_method,extension
+
+from waflib import Task
+
+from waflib.Node import Node
+
+# relative include paths for emcc
+@feature('c','cxx','d','asm','fc','includes')
+@after_method('propagate_uselib_vars','process_source','apply_incpaths')
+def apply_incpaths_emcc(self):
+    if self.env.CC[0] == 'emcc':
+        lst=self.to_incnodes(
+            self.to_list(getattr(self,'includes',[])) +
+                self.env['INCLUDES']
+        )
+        self.includes_nodes=lst
+        self.env['INCPATHS'] = [x.path_from(self.bld.bldnode) for x in lst]
+
 def build(bld):
+    # Force emscripten to optimize compiled objects.
+    os.environ['EMCC_OPTIMIZE_NORMALLY'] = '1'
+
     bld.install_files( '${PREFIX}/include', 'src/ph.h' )
 
     source = bld.path.ant_glob('src/*.c')

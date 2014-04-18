@@ -1,0 +1,18 @@
+diff --git a/Makefile b/Makefile
+index 750ae44..eb9c528 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,10 +1,10 @@
+-CFLAGS = -g -Wall -I.
+-CC = gcc
++CFLAGS += -g -Wall -I.
++CC &= gcc
+ TESTS = $(patsubst %.c, %, $(wildcard t/*.c))
+ 
+ ifdef ANSI
+ 	# -D_BSD_SOURCE for MAP_ANONYMOUS
+-	CFLAGS += -ansi -D_BSD_SOURCE
++	CFLAGS += -ansi -D_BSD_SOURCE -DMAP_ANONYMOUS
+ 	LDLIBS += -lbsd-compat
+ endif
+ 

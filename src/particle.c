@@ -135,15 +135,10 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
       ingress = 1e-5;
     }
 
-    phdouble
-      lx = abx,
-      ly = aby,
-      al = ingress,
-      pt = (al - ar) / al,
-      qt = br / al;
-    col->distance = abr - ingress;
-    col->lambx = lx * (qt - pt);
-    col->lamby = ly * (qt - pt);
+    phdouble pqt = abr / ingress - 1;
+    // col->distance = abr - ingress;
+    col->lambx = abx * pqt;
+    col->lamby = aby * pqt;
 
     return 1;
   }
@@ -169,20 +164,20 @@ void phSolve(phparticle *self, phparticle *other, phcollision *col) {
     bm = amsq / mass,
     avx = selflast->x - selfpos->x,
     avy = selflast->y - selfpos->y,
-    avm = phHypot(avx, avy),
+    // avm = phHypot2(avx, avy),
     bvx = otherlast->x - otherpos->x,
     bvy = otherlast->y - otherpos->y,
-    bvm = phHypot(bvx, bvy),
-    fric = fabs(col->distance) * self->friction * other->friction;
+    // bvm = phHypot2(bvx, bvy),
+    fric = 1 - (self->friction * other->friction);
 
-  if (avm != 0) {
-    avx = (avx / avm) * (avm - fric);
-    avy = (avy / avm) * (avm - fric);
-  }
-  if (bvm != 0) {
-    bvx = bvx / bvm * (bvm - fric);
-    bvy = bvy / bvm * (bvm - fric);
-  }
+  // if (avm != 0) {
+  avx *= fric;
+  avy *= fric;
+  // }
+  // if (bvm != 0) {
+  bvx *= fric;
+  bvy *= fric;
+  // }
 
   if (self->isStatic) {
     am = 0;

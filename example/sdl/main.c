@@ -13,7 +13,7 @@
 #include "SDL/SDL.h"
 #include "SDL/SDL_image.h"
 #if !USE_GLEW
-#include "SDL/SDL_opengl.h"
+// #include "SDL/SDL_opengl.h"
 #endif
 
 #ifdef AUDIO_OPENAL
@@ -22,7 +22,7 @@
 
 #if EMSCRIPTEN
 #include <emscripten.h>
-#include "platform/window.h"
+// #include "platform/window.h"
 #endif
 
 #include <stdio.h>
@@ -90,8 +90,7 @@ struct gldata {
   struct glparticle particles[kParticleCount+1024];
 };
 
-static void set_particle_vertices(void *ctx, phparticle *particle) {
-  struct gldata *data = ctx;
+static void set_particle_vertices(struct gldata *data, phparticle *particle) {
   struct glcolor color = { 255, 255, 255, 128 };
 
   if ( particle->isStatic ) {
@@ -99,29 +98,15 @@ static void set_particle_vertices(void *ctx, phparticle *particle) {
   }
 
   phbox particlebox = phAabb(particle->position, particle->radius);
-  data->particles[data->index].vertices[0].vertex[0] = particlebox.left;
-  data->particles[data->index].vertices[0].vertex[1] = particlebox.top;
-  data->particles[data->index].vertices[0].color = color;
-
-  data->particles[data->index].vertices[1].vertex[0] = particlebox.right;
-  data->particles[data->index].vertices[1].vertex[1] = particlebox.top;
-  data->particles[data->index].vertices[1].color = color;
-
-  data->particles[data->index].vertices[2].vertex[0] = particlebox.right;
-  data->particles[data->index].vertices[2].vertex[1] = particlebox.bottom;
-  data->particles[data->index].vertices[2].color = color;
-
-  data->particles[data->index].vertices[3].vertex[0] = particlebox.left;
-  data->particles[data->index].vertices[3].vertex[1] = particlebox.top;
-  data->particles[data->index].vertices[3].color = color;
-
-  data->particles[data->index].vertices[4].vertex[0] = particlebox.left;
-  data->particles[data->index].vertices[4].vertex[1] = particlebox.bottom;
-  data->particles[data->index].vertices[4].color = color;
-
-  data->particles[data->index].vertices[5].vertex[0] = particlebox.right;
-  data->particles[data->index].vertices[5].vertex[1] = particlebox.bottom;
-  data->particles[data->index].vertices[5].color = color;
+  struct glparticle *glp = &data->particles[data->index];
+  *glp = (struct glparticle) {{
+    {particlebox.left, particlebox.top, color},
+    {particlebox.right, particlebox.top, color},
+    {particlebox.right, particlebox.bottom, color},
+    {particlebox.left, particlebox.top, color},
+    {particlebox.left, particlebox.bottom, color},
+    {particlebox.right, particlebox.bottom, color}
+  }};
   data->index++;
 }
 
@@ -140,7 +125,7 @@ void draw() {
   //   -160, -120
   // };
 
-  phv size = phv(640, 480);
+  phv size = phv(640, 640);
   // float right = world->aabb.right,
   float right = size.x,
   left = 0,
@@ -172,7 +157,10 @@ void draw() {
   data.index = 0;
   phlistiterator _litr;
   phiterator *itr = phIterator(&world->particles, &_litr);
-  phIterate(itr, (phitrfn) set_particle_vertices, &data);
+  phStaticIterate(
+    (phiteratornext) phListNext, (phiteratorderef) phListDeref,
+    itr, (phitrfn) set_particle_vertices, &data
+  );
 
   glBindBuffer(GL_ARRAY_BUFFER, buffer);
   glBufferData(
@@ -199,9 +187,9 @@ int main(int argc, char *argv[])
   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 ); // *new*
 
   #if EMSCRIPTEN
-  screen = SDL_SetVideoMode( 640, 480, 16, SDL_OPENGL | SDL_RESIZABLE ); // *changed*
+  screen = SDL_SetVideoMode( 640, 640, 16, SDL_OPENGL | SDL_RESIZABLE ); // *changed*
   #else
-  screen = SDL_SetVideoMode( 640, 480, 16, SDL_OPENGL ); // *changed*  
+  screen = SDL_SetVideoMode( 640, 640, 16, SDL_OPENGL ); // *changed*  
   #endif
   if ( !screen ) {
     printf("Unable to set video mode: %s\n", SDL_GetError());
@@ -226,12 +214,14 @@ int main(int argc, char *argv[])
   printf( "VIEWPORT dimensions %d %d %d %d.\n", VIEWPORT_DIMENSIONS );
   VIEWPORT();
 #else
-  printf( "VIEWPORT dimensions %d %d %d %d.\n", 0, 0, 640, 480 );
-  glViewport( 0, 0, 640, 480 );
+  printf( "VIEWPORT dimensions %d %d %d %d.\n", 0, 0, 640, 640 );
+  glViewport( 0, 0, 640, 640 );
 #endif
 #if EMSCRIPTEN
   emscripten_set_main_loop(main_loop, 0, 0);
 #endif
+
+  setGetTicksFunction( SDL_GetTicks );
 
   init();
 
@@ -272,8 +262,6 @@ int main(int argc, char *argv[])
   glUniformMatrix4fv(modelview_projection, 1, GL_TRUE, identity);
 
   glGenBuffers(1, &buffer);
-
-  setGetTicksFunction( SDL_GetTicks );
 #if !EMSCRIPTEN
   while ( 1 ) {
     main_loop();

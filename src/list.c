@@ -144,24 +144,3 @@ phlist * phRemoveLast(phlist *self, void *item) {
 
   return self;
 }
-
-void * phShift(phlist *self) {
-  phlistnode *node = self->first;
-
-  if (node) {
-    if ((self->first = node->next)) {
-      node->next->prev = NULL;
-    } else {
-      self->last = NULL;
-    }
-
-    node->next = self->freeList;
-    self->freeList = node;
-
-    self->length--;
-
-    return node->item;
-  } else {
-    return NULL;
-  }
-}
