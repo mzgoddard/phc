@@ -16,20 +16,34 @@ void phDdvtDump(phddvt *self) {
     phDdvtDump(self->br);
     phFree(self->br); self->br = NULL;
   }
-  phDump(&self->particles, NULL);
-  phFree(self->_particleArray.items);
+  // phDump(&self->particles, NULL);
+  // phFree(self->_particleArray.items);
 }
 
 void _phDdvtAddLeaf(phddvt *self, phparticle *particle) {
-  phPrepend(&self->particles, particle);
+  // phPrepend(&self->particles, particle);
+  if (!self->_particleArray.items) {
+    self->_particleArray.items = (void**) &self->_particleItems;
+  }
+  self->_particleArray.items[self->length] = particle;
   self->length++;
-  self->_dirtyParticles++;
+  self->_particleArray.capacity = self->length;
+  // self->_dirtyParticles++;
 }
 
 void _phDdvtRemoveLeaf(phddvt *self, phparticle *particle) {
-  phRemove(&self->particles, particle);
+  // phRemove(&self->particles, particle);
+  // for (phint i = self->length - 1; i >= 0; --i) {
+  for (phint i = 0, length = self->length; i < length; ++i) {
+    if (self->_particleArray.items[i] == particle) {
+      self->_particleArray.items[i] =
+        self->_particleArray.items[self->length - 1];
+      break;
+    }
+  }
   self->length--;
-  self->_dirtyParticles = self->length;
+  self->_particleArray.capacity = self->length;
+  // self->_dirtyParticles = self->length;
 }
 
 void _phDdvtUpdateLeaf(
@@ -175,15 +189,19 @@ void _phDdvtToChildren(phddvt *self) {
   ALLOC_AND_INIT(br, BR);
   #undef ALLOC_AND_INIT
 
-  phlistiterator _listitr;
-  phiterator *itr = phIterator(&self->particles, &_listitr);
+  // phlistiterator _listitr;
+  // phiterator *itr = phIterator(&self->particles, &_listitr);
+  pharrayiterator _arrayitr;
+  phiterator *itr = phArrayIterator(&self->_particleArray, &_arrayitr);
   phIterate(itr, (phitrfn) _phDdvtTestAndAdd, self);
-  phClean(&self->particles, NULL);
+  // phClean(&self->particles, NULL);
+  self->_particleArray.capacity = 0;
 }
 
 void _phDdvtAddIfUnique(phddvt *self, phparticle *particle) {
-  phlistiterator _listitr;
-  if (!phContains(phIterator(&self->particles, &_listitr), particle)) {
+  // phlistiterator _listitr;
+  pharrayiterator _arrayitr;
+  if (!phContains(phArrayIterator(&self->_particleArray, &_arrayitr), particle)) {
     if (
       phBoxContain(self->box, particle->_worldData.oldBox) ||
         !self->parent
@@ -196,10 +214,12 @@ void _phDdvtAddIfUnique(phddvt *self, phparticle *particle) {
 
 void _phDdvtFromChildren(phddvt *self) {
   self->length = 0;
-  phlistiterator _listitr;
+  // phlistiterator _listitr;
+  // phiterator *itr;
+  pharrayiterator _arrayitr;
   phiterator *itr;
   #define ITR_ADD_UNIQUE(corner) \
-    itr = phIterator(&self->corner->particles, &_listitr); \
+    itr = phArrayIterator(&self->corner->_particleArray, &_arrayitr); \
     phIterate(itr, (phitrfn) _phDdvtAddIfUnique, self); \
     phDdvtDump(self->corner); phFree(self->corner); self->corner = NULL
   ITR_ADD_UNIQUE(tl);
@@ -379,13 +399,13 @@ static void _phDdvtCheckParticleArray(phddvt *self) {
     ) {
       items[j] = items[i];
     }
-    phlistnode *node = self->particles.first;
+    // phlistnode *node = self->particles.first;
     // for (phint i = newParticles - 1; node && i; --i, node = node->prev) {}
     // for (phint i = self->length - newParticles; node && i; --i, node = node->next) {}
-    for (; node && newParticles >= 0; node = node->next, ++items, --newParticles) {
-      *items = node->item;
-    }
-    self->_particleArray.capacity = self->particles.length;
+    // for (; node && newParticles >= 0; node = node->next, ++items, --newParticles) {
+    //   *items = node->item;
+    // }
+    // self->_particleArray.capacity = self->length;
     self->_dirtyParticles = 0;
   }
 }
@@ -396,11 +416,13 @@ phbool phDdvtNext(phddvtiterator *self) {
   }
   phbool next = 0;
   while (!next) {
-    if (self->leafItr.list) {
-      next = phListNext(&self->leafItr);
-      if (!next) {
-        self->leafItr.list = NULL;
-      }
+    // if (self->leafItr.list) {
+    if (self->arrayItr.test) {
+      // next = phListNext(&self->leafItr);
+      next = phArrayNext(&self->arrayItr);
+      // if (!next) {
+      //   self->leafItr.list = NULL;
+      // }
     } else {
       // if parent, iterate over tl, then tr, bl, br
       _phDdvtNextChild((phddvtiterator *) self);
@@ -409,9 +431,11 @@ phbool phDdvtNext(phddvtiterator *self) {
       }
       // if leaf, iterate over particles
       if (self->ddvt && !self->ddvt->tl) {
-        if (self->leafItr.list != &self->ddvt->particles) {
-          phIterator(&self->ddvt->particles, &self->leafItr);
-        }
+        // if (self->leafItr.list != &self->ddvt->particles) {
+        // phIterator(&self->ddvt->particles, &self->leafItr);
+        phArrayIterator(&self->ddvt->_particleArray, &self->arrayItr);
+        self->arrayItr.test = 1;
+        // }
       }
     }
   }
@@ -419,10 +443,11 @@ phbool phDdvtNext(phddvtiterator *self) {
 }
 
 void * phDdvtDeref(phddvtiterator *self) {
-  if (self->leafItr.list) {
-    return phListDeref(&self->leafItr);
-  }
-  return NULL;
+  // if (self->leafItr.list) {
+  //   return phListDeref(&self->leafItr);
+  // }
+  // return NULL;
+  return phArrayDeref(&self->arrayItr);
 }
 
 phiterator * phDdvtIterator(phddvt *self, phddvtiterator *itr) {
@@ -434,7 +459,9 @@ phiterator * phDdvtIterator(phddvt *self, phddvtiterator *itr) {
   while (itr->ddvt->tl) {
     itr->ddvt = itr->ddvt->tl;
   }
-  phIterator(&itr->ddvt->particles, &itr->leafItr);
+  // phIterator(&itr->ddvt->particles, &itr->leafItr);
+  phArrayIterator(&itr->ddvt->_particleArray, &itr->arrayItr);
+  itr->arrayItr.test = 1;
   return (phiterator *) itr;
 }
 
@@ -483,7 +510,7 @@ phbool phDdvtPairNext(phddvtpairiterator *self) {
         //   *items = node->item;
         // }
         // particles->capacity = ddvt->particles.length;
-        _phDdvtCheckParticleArray(ddvt);
+        // _phDdvtCheckParticleArray(ddvt);
         *particles = ddvt->_particleArray;
         arrayItr1->items = particles->items;
         arrayItr1->end = particles->items + particles->capacity;
@@ -529,7 +556,7 @@ phiterator * phDdvtPairIterator(phddvt *self, phddvtpairiterator *itr) {
   //   *items = node->item;
   // }
   // itr->particles.capacity = itr->ddvt->particles.length;
-  _phDdvtCheckParticleArray(itr->ddvt);
+  // _phDdvtCheckParticleArray(itr->ddvt);
   itr->particles = itr->ddvt->_particleArray;
   phArrayIterator(&itr->particles, &itr->arrayItr1);
   phArrayNext(&itr->arrayItr1);
