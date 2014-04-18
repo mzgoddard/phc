@@ -1,12 +1,5 @@
 #include "ph.h"
 
-#define phlistnode(next, prev, item) ((phlistnode) { next, prev, item })
-
-#define phlistiterator(list, node) ((phlistiterator) { \
-  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
-  list->first, NULL, NULL \
-})
-
 void phDump(phlist *self, void (*freeItem)(void *)) {
   phlistnode *node = self->first;
 
@@ -30,27 +23,6 @@ void phDump(phlist *self, void (*freeItem)(void *)) {
   self->first = NULL;
   self->last = NULL;
   self->freeList = NULL;
-}
-
-phlist * phAppend(phlist *self, void *item) {
-  phlistnode *node = self->freeList;
-  if (node) {
-    self->freeList = self->freeList->next;
-  } else {
-    node = phAlloc(phlistnode);
-  }
-
-  *node = phlistnode(NULL, self->last, item);
-
-  if (!self->first) {
-    self->first = node;
-  } else {
-    self->last->next = node;
-  }
-  self->last = node;
-
-  self->length++;
-  return self;
 }
 
 phlist * phPrepend(phlist *self, void *item) {
