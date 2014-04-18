@@ -238,13 +238,14 @@ typedef struct phparticle {
 
 typedef struct phddvt {
   phbox box;
-  phlist particles;
+  // phlist particles;
   phint length;
   pharray _particleArray;
   phint _dirtyParticles;
   phint minParticles;
   phint maxParticles;
   phbool isSleeping;
+  void *_particleItems[512];
   struct phddvt *parent;
   union {
     struct phddvt *children[4];
@@ -268,7 +269,7 @@ typedef struct phddvtpair {
 } phddvtpair;
 
 #define phddvt(parent, box, min, max) ((phddvt) { \
-  box, phlist(), 0, pharray(0, NULL), 1, min, max, 0, \
+  box, 0, pharray(0, NULL), 0, min, max, 0, {}, \
   parent, NULL, NULL, NULL, NULL \
 })
 
@@ -279,12 +280,14 @@ typedef struct phddvtiterator {
   phddvt *topDdvt;
   phddvt *ddvt;
   phlistiterator leafItr;
+  pharrayiterator arrayItr;
 } phddvtiterator;
 
 #define phddvtiterator(ddvt) ((phddvtiterator) { \
   (phiteratornext) phDdvtNext, (phiteratorderef) phDdvtDeref, \
   ddvt->parent, ddvt, \
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL \
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+  NULL, NULL, NULL, NULL, 0, \
 })
 
 typedef struct phddvtpairiterator {
