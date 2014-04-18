@@ -14,8 +14,8 @@ def configure(ctx):
     ctx.load('compiler_c')
 
     if CC == 'emcc':
-        ctx.env.CC = 'emcc'
-        ctx.env.LINK_CC = 'emcc'
+        ctx.env.CC = ['emcc']
+        ctx.env.LINK_CC = ['emcc']
 
     # Last time debugged with clang it created invalid paths in the debug data
     # which lead to missing function debug data for *.c code.
@@ -85,7 +85,7 @@ from waflib.Node import Node
 @feature('c','cxx','d','asm','fc','includes')
 @after_method('propagate_uselib_vars','process_source','apply_incpaths')
 def apply_incpaths_emcc(self):
-    if self.env.CC.endswith('emcc'):
+    if self.env.CC[0] == 'emcc':
         lst=self.to_incnodes(
             self.to_list(getattr(self,'includes',[])) +
                 self.env['INCLUDES']
