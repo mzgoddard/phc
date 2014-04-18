@@ -28,6 +28,36 @@ void b_add1e6(void *ctx) {
   }
 }
 
+#if __SSE__
+typedef phdouble _phv __attribute__((ext_vector_type(2)));
+#define _phv(x, y) ((_phv) {x, y});
+
+_phv _phAdd(_phv a, _phv b) {
+  return a + b;
+}
+
+_phv _a = _phv(1, 2);
+_phv _b = _phv(2, 3);
+
+void b_addv(void *ctx) {
+  _phv result = _phAdd(_a, _b);
+}
+
+void b_addv100(void *ctx) {
+  _phv result = _phv(0, 0);
+  for (phint i = 0; i < 100; ++i) {
+    result = _phAdd(result, _a);
+  }
+}
+
+void b_addv1e6(void *ctx) {
+  _phv result = _phv(0, 0);
+  for (phint i = 0; i < 1000000; ++i) {
+    result = _phAdd(result, _a);
+  }
+}
+#endif
+
 void b_intersect(void *ctx) {
   phbool result;
   for (phint i = 0; i < 1000000; ++i) {
@@ -60,6 +90,9 @@ void bench_math() {
     note("1");
     bench(
       "add", b_add, NULL,
+      #if __SSE__
+      "vector add", b_addv, NULL,
+      #endif
       NULL
     );
   }
@@ -68,6 +101,9 @@ void bench_math() {
     note("100");
     bench(
       "add", b_add100, NULL,
+      #if __SSE__
+      "vector add", b_addv100, NULL,
+      #endif
       NULL
     );
   }
@@ -76,6 +112,9 @@ void bench_math() {
     note("1e6");
     bench(
       "add", b_add1e6, NULL,
+      #if __SSE__
+      "vector add", b_addv1e6, NULL,
+      #endif
       NULL
     );
   }
