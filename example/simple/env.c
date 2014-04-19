@@ -9,6 +9,10 @@ static phv gravity;
 
 unsigned int (*getTicks)() = NULL;
 
+#ifndef M_PI
+#define M_PI 3.14159265359
+#endif
+
 void init() {
   int startTime = 0;
   int endTime = 0;
@@ -26,18 +30,24 @@ void init() {
     phparticle *particle = phCreate(phparticle, phZero());
     particle->friction = 0.01;
     particle->factor = 0.5 + (float) rand() / RAND_MAX / 2.5;
+    // particle->position = phv(
+    //   rand() % (int) world->_optimization.box.right,
+    //   rand() % (int) world->_optimization.box.top / 3 * 2
+    // );
     particle->position = phv(
-      rand() % (int) world->_optimization.box.right,
-      rand() % (int) world->_optimization.box.top / 3 * 2
+      i % ((int) world->_optimization.box.right / (kParticleBaseSize + kParticleSizeRange) / 2) * (kParticleBaseSize + kParticleSizeRange) * 2 + i % 31 / 16.0,
+      i / ((int) world->_optimization.box.right / (kParticleBaseSize + kParticleSizeRange) / 2) * (kParticleBaseSize + kParticleSizeRange)
+      // (i % 31 * i) % (int) world->_optimization.box.right,
+      // i % (int) world->_optimization.box.top / 3 * 2
     );
     particle->lastPosition = particle->position;
     particle->radius =
       kParticleBaseSize + (float) rand() / RAND_MAX * kParticleSizeRange;
     particle->mass = M_PI * particle->radius * particle->radius;
-    if (rand() > RAND_MAX * 0.99) {
-      // particle->radius += 10;
-      particle->mass *= 1000;
-    }
+    // if (rand() > RAND_MAX * 0.99) {
+    //   // particle->radius += 10;
+    //   particle->mass *= 1000;
+    // }
     phWorldAddParticle(world, particle);
   }
 

@@ -46,7 +46,9 @@ def configure(ctx):
         ctx.env.append_value('CFLAGS', 'FUNCTION_POINTER_ALIGNMENT=1')
         ctx.env.append_value('LINKFLAGS', '-s')
         ctx.env.append_value('LINKFLAGS', 'ASM_JS=1')
-        ctx.env.cprogram_PATTERN = '%s.js'
+        ctx.env.append_value('LINKFLAGS', '-s')
+        ctx.env.append_value('LINKFLAGS', 'TOTAL_MEMORY=67108864')
+        ctx.env.cprogram_PATTERN = '%s.html'
 
     ctx.start_msg( 'init submodules' )
     gitStatus = ctx.exec_command( 'git submodule init && git submodule update' )
@@ -56,7 +58,10 @@ def configure(ctx):
         ctx.fatal( 'fail' )
 
     ctx.start_msg( 'build libtap dependency' )
-    libtapStatus = ctx.exec_command( 'cd vendor/libtap && make' )
+    if CC == 'emcc':
+        libtapStatus = ctx.exec_command( 'cd vendor/libtap && CC=emcc AR=emar make clean libtap.a' )
+    else:
+        libtapStatus = ctx.exec_command( 'cd vendor/libtap && make clean all' )
     if libtapStatus == 0:
         ctx.end_msg( 'ok', 'GREEN' )
     else:
@@ -66,12 +71,17 @@ def configure(ctx):
 
     ctx.setenv('sdl', cc_env)
     try:
-        ctx.check_cfg(
-            path='sdl-config', args='--cflags --libs',
-            package='', uselib_store='SDL'
-        )
+        # if CC == 'emcc':
+        #     raise Exception('sdl-example does not yet support emscripten')
+        if CC == 'emcc':
+            ctx.env.cprogram_PATTERN = '%s.html'
+        else:
+            ctx.check_cfg(
+                path='sdl-config', args='--cflags --libs',
+                package='', uselib_store='SDL'
+            )
 
-        ctx.env.FRAMEWORK = [ 'Cocoa', 'OpenGL' ]
+            ctx.env.FRAMEWORK = [ 'Cocoa', 'OpenGL' ]
     except:
         ctx.env.DISABLED = True
 
@@ -111,7 +121,10 @@ def build(bld):
     # bld.shlib( **d )
 
     bld.program(
-        source=bld.path.ant_glob('test/*.c'),
+        source=bld.path.ant_glob('src/*.c test/*.c'),
+        defines=
+            'PH_DDVT_PARTICLES_SUBDIVIDE=self->maxParticles ' +
+            'PH_DDVT_PARTICLES_JOIN=self->minParticles',
         includes='src ../vendor/libtap',
         target='ph-test',
         libpath='../vendor/libtap',
@@ -149,7 +162,7 @@ def build(bld):
             defines='FRAMESTATS=1',
             target='sdl-example',
             lib='m',
-            framework=['Cocoa', 'OpenGL'],
+            framework=['Cocoa', 'OpenGL'] if bld.env.CC[0] != 'emcc' else [],
             use='ph SDL',
             install_path=None
         )

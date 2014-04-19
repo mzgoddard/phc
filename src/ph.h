@@ -237,15 +237,15 @@ typedef struct phparticle {
 })
 
 #ifndef PH_DDVT_PARTICLES_JOIN
-#define PH_DDVT_PARTICLES_JOIN self->minParticles
+// #define PH_DDVT_PARTICLES_JOIN self->minParticles
 // TODO: static number here is faster but will fail tests. Need to make tests
 // compile with their own values, (or not tests compile with static).
-// #define PH_DDVT_PARTICLES_JOIN 4
+#define PH_DDVT_PARTICLES_JOIN 4
 #endif
 
 #ifndef PH_DDVT_PARTICLES_SUBDIVIDE
-#define PH_DDVT_PARTICLES_SUBDIVIDE self->maxParticles
-// #define PH_DDVT_PARTICLES_SUBDIVIDE 16
+// #define PH_DDVT_PARTICLES_SUBDIVIDE self->maxParticles
+#define PH_DDVT_PARTICLES_SUBDIVIDE 16
 #endif
 
 #ifndef PH_MAX_DDVT_PARTICLES
@@ -431,7 +431,7 @@ typedef struct phstick {
 
 #ifdef EMSCRIPTEN
 // Compiling under emscripten complains about implicit sqrt declaration.
-double sqrt(double);
+// double sqrt(double);
 #endif
 
 static phv phZero() {return phv(0, 0);}
