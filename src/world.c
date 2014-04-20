@@ -29,6 +29,12 @@ static phcollision *_phWorldNextCollision(phworld *self) {
 
 static void _phWorldSaveCollision(phworld *self) {
   phcollision *col = phShift(&self->_optimization.nextCollisions);
+  if (!self->_optimization.collisions.freeList) {
+    self->_optimization.nextCollisions.freeList =
+      (self->_optimization.collisions.freeList =
+        self->_optimization.nextCollisions.freeList)->next;
+    self->_optimization.collisions.freeList->next = NULL;
+  }
   phAppend(&self->_optimization.collisions, col);
 }
 
@@ -111,9 +117,19 @@ void phWorldInternalStep(phworld *self) {
     *collisions = *nextCollisions;
     *nextCollisions = tmp;
   }
-  while (collisions->length) {
-    phcollision *col = phShift(collisions);
-    phAppend(nextCollisions, col);
+  if (collisions->length) {
+    collisions->last->next = nextCollisions->first;
+    if (nextCollisions->first) {
+      nextCollisions->first->prev = collisions->last;
+    }
+    nextCollisions->first = collisions->first;
+    if (!nextCollisions->last) {
+      nextCollisions->last = collisions->last;
+    }
+    collisions->first = NULL;
+    collisions->last = NULL;
+    nextCollisions->length += collisions->length;
+    collisions->length = 0;
   }
 
   // post constraint
