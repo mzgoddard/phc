@@ -155,17 +155,16 @@ void draw() {
 
   struct gldata data;
   data.index = 0;
-  phlistiterator _litr;
-  phiterator *itr = phIterator(&world->particles, &_litr);
-  phStaticIterate(
-    (phiteratornext) phListNext, (phiteratorderef) phListDeref,
-    itr, (phitrfn) set_particle_vertices, &data
-  );
+  phworldparticleiterator _wpitr;
+  phWorldParticleIterator(world, &_wpitr);
+  while (phWorldParticleNext(&_wpitr)) {
+    set_particle_vertices(&data, phWorldParticleDeref(&_wpitr));
+  }
 
   glBindBuffer(GL_ARRAY_BUFFER, buffer);
   glBufferData(
     GL_ARRAY_BUFFER,
-  sizeof(struct glparticle) * (particle_count + 1024), data.particles,
+  sizeof(struct glparticle) * data.index, data.particles,
   GL_DYNAMIC_DRAW);
 
   glVertexAttribPointer(positionAttribute, 2, GL_FLOAT, GL_FALSE, sizeof(struct glvertex), (GLvoid *) 0);

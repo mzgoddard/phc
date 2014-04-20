@@ -2,6 +2,7 @@
 
 void phWorldDump(phworld *self) {
   phDump(&self->particles, NULL);
+  phFree(self->particleArray.items);
   phDump(&self->particleData, free);
   phDump(&self->constraints.beforeStep, NULL);
   phDump(&self->constraints.afterStep, NULL);
@@ -41,12 +42,11 @@ void phWorldInternalStep(phworld *self) {
 
   // integrate, sleep, and update ddvt
   phbox oldBox, newBox;
-  itr = phIterator(&self->particles, &_litr);
   phdouble dt = self->timing.dt;
   phddvt *ddvt = &self->_optimization.ddvt;
-  while (phListNext((phlistiterator *) itr)) {
-    // phparticle *particle = phListDeref((phlistiterator *) itr);
-    phparticle *particle = _litr.node->item;
+  phparticle **items = (phparticle **) self->particleArray.items;
+  for (phint i = 0, l = self->particleIndex; l - i; ++i) {
+    phparticle *particle = items[i];
     phIntegrate(particle, dt);
     phTestReset(particle);
     phv position = particle->position;
@@ -68,16 +68,15 @@ void phWorldInternalStep(phworld *self) {
   // test and unsleep
   phddvtpairiterator _ditr;
   itr = phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
+  phcollision *nextCollision = _phWorldNextCollision(self);
   while (phDdvtPairNext((phddvtpairiterator *) itr)) {
-    pharray array = _ditr.particles;
-    // phint length = _ditr.ddvt->particles.length;
+    items = (phparticle **) _ditr.particles.items;
     phint length = _ditr.ddvt->length;
     for (phint i = 0; length - i; ++i) {
-      phparticle *a = array.items[i];
+      phparticle *a = items[i];
       phbox boxA = a->_worldData.oldBox;
       for (phint j = i + 1; length - j; ++j) {
-        phcollision *nextCollision = _phWorldNextCollision(self);
-        phparticle *b = array.items[j];
+        phparticle *b = items[j];
         phbox boxB = b->_worldData.oldBox;
 
         // Pre test with boxes, which is cheaper than circle test. Then
@@ -89,6 +88,7 @@ void phWorldInternalStep(phworld *self) {
           nextCollision->a = a;
           nextCollision->b = b;
           _phWorldSaveCollision(self);
+          nextCollision = _phWorldNextCollision(self);
         }
       }
     }
@@ -158,6 +158,17 @@ phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
     phparticleworlddata(phAabb(particle->position, particle->radius));
   particle->_worldData.oldPosition = particle->position;
   phAppend(&self->particles, particle);
+  if (self->particleArray.capacity == self->particleIndex) {
+    phint oldCapacity = self->particleArray.capacity;
+    void **oldItems = self->particleArray.items;
+    phint newCapacity = oldCapacity + 1024;
+    self->particleArray = pharray(newCapacity, calloc(newCapacity, sizeof(void *)));
+    for (phint i = 0; i < oldCapacity; ++i) {
+      self->particleArray.items[i] = oldItems[i];
+    }
+    free(oldItems);
+  }
+  self->particleArray.items[self->particleIndex++] = particle;
   phDdvtAdd(&self->_optimization.ddvt, particle);
   return self;
 }
@@ -166,6 +177,13 @@ phworld * phWorldRemoveParticle(phworld *self, phparticle *particle) {
   phbox oldBox = particle->_worldData.oldBox;
   phDdvtRemove(&self->_optimization.ddvt, particle, oldBox);
   phRemove(&self->particles, particle);
+  for (phint i = 0, l = self->particleIndex; i < l; ++i) {
+    if (self->particleArray.items[i] == particle) {
+      self->particleArray.items[i] =
+        self->particleArray.items[--self->particleIndex];
+      break;
+    }
+  }
   phParticleWorldDataDump(&particle->_worldData);
   // phFree(particle->_worldData);
   // particle->_worldData = NULL;

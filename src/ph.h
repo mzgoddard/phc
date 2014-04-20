@@ -338,6 +338,8 @@ typedef struct phddvtpairiterator {
 
 typedef struct phworld {
   phlist particles;
+  pharray particleArray;
+  phint particleIndex;
   phlist particleData;
   struct {
     phlist beforeStep, afterStep;
@@ -366,13 +368,26 @@ typedef struct phworld {
 } phworld;
 
 #define phworld(box) ((phworld) { \
-  phlist(), phlist(), \
+  phlist(), \
+  pharray(0, NULL), 0, \
+  phlist(), \
   phlist(), phlist(), \
   1, 20, \
   0, 1 / 60.0, 0, 10, \
   box, phddvt(NULL, box, 4, 16), phlist(), phlist(), \
   phlist(), phlist(), \
   0 \
+})
+
+typedef struct phworldparticleiterator {
+  phiterator iterator;
+  pharrayiterator arrayitr;
+} phworldparticleiterator;
+
+#define phworldparticleiterator(world) ((phworldparticleiterator) { \
+  (phiteratornext) phWorldParticleNext, \
+  (phiteratorderef) phWorldParticleDeref, \
+  pharrayiterator((&world->particleArray)) \
 })
 
 typedef struct phworldgarbage {
@@ -797,6 +812,25 @@ phworld * phWorldSafeRemoveParticle(phworld *, phparticle *, phfreefn);
 phworld * phWorldAddConstraint(phworld *, phconstraint *);
 phworld * phWorldRemoveConstraint(phworld *, phconstraint *);
 phworld * phWorldSafeRemoveConstraint(phworld *, phconstraint *, phfreefn);
+
+static phbool phWorldParticleNext(phworldparticleiterator *itr) {
+  return phArrayNext(&itr->arrayitr);
+}
+
+static void * phWorldParticleDeref(phworldparticleiterator *itr) {
+  return phArrayDeref(&itr->arrayitr);
+}
+
+static phiterator * phWorldParticleIterator(
+  phworld *self, phworldparticleiterator *itr
+) {
+  if (!itr) {
+    itr = phAlloc(phworldparticleiterator);
+  }
+  *itr = phworldparticleiterator(self);
+  itr->arrayitr.end = self->particleArray.items + self->particleIndex;
+  return (phiterator *) itr;
+}
 
 // phComposite
 

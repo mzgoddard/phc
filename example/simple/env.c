@@ -182,12 +182,11 @@ void step(float dt) {
     }
 
     frames++;
-    phlistiterator _litr;
-    phiterator *itr = phIterator(&world->particles, &_litr);
-    phStaticIterate(
-      (phiteratornext) phListNext, (phiteratorderef) phListDeref,
-      itr, (phitrfn) gravityContainHandle, world
-    );
+    phworldparticleiterator _wpitr;
+    phWorldParticleIterator(world, &_wpitr);
+    while (phWorldParticleNext(&_wpitr)) {
+      gravityContainHandle(world, phWorldParticleDeref(&_wpitr));
+    }
     // itr = phIterator(&world->particles, &_litr);
     // phIterate(itr, (phitrfn) containIterator, world);
     phWorldInternalStep(world);
