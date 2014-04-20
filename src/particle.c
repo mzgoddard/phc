@@ -118,16 +118,9 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
 
   ingress = abx*abx+aby*aby;
   if (((ingress < abr*abr))) {
-    if (_phHasCollidedAlready(self, other)) {
-      return 0;
-    }
-
     if (_phIgnoresOther(self, other) || _phIgnoresOther(self, other->data)) {
       return 0;
     }
-
-    _phAckCollision(self, other);
-    _phAckCollision(other, self);
 
     ingress = sqrt(ingress);
 
@@ -147,6 +140,13 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
 }
 
 void phSolve(phparticle *self, phparticle *other, phcollision *col) {
+  if (_phHasCollidedAlready(self, other)) {
+    return;
+  }
+
+  _phAckCollision(self, other);
+  _phAckCollision(other, self);
+
   phv
     *selfpos = &(self->position),
     *otherpos = &(other->position),
@@ -164,20 +164,14 @@ void phSolve(phparticle *self, phparticle *other, phcollision *col) {
     bm = amsq / mass,
     avx = selflast->x - selfpos->x,
     avy = selflast->y - selfpos->y,
-    // avm = phHypot2(avx, avy),
     bvx = otherlast->x - otherpos->x,
     bvy = otherlast->y - otherpos->y,
-    // bvm = phHypot2(bvx, bvy),
     fric = 1 - (self->friction * other->friction);
 
-  // if (avm != 0) {
   avx *= fric;
   avy *= fric;
-  // }
-  // if (bvm != 0) {
   bvx *= fric;
   bvy *= fric;
-  // }
 
   if (self->isStatic) {
     am = 0;
