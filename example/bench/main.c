@@ -51,6 +51,7 @@ void main_loop() {
 
     printf("%d frames in %g seconds\n", frames, t);
     printf("%g frames per second\n", frames / t);
+    printf("%g milliseconds per frame\n", t / frames * 1000);
 
     #if EMSCRIPTEN
     exit(0);
