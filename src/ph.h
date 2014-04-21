@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <tgmath.h>
 
+#if PH_THREAD
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
+#endif
+
 // https://groups.google.com/forum/#!topic/comp.std.c/d-6Mj5Lko_s
 #define PP_NARG(...) \
   PP_NARG_(__VA_ARGS__,PP_RSEQ_N())
@@ -154,6 +160,11 @@ typedef struct phlistiterator {
   list->first, NULL, NULL \
 })
 
+#define phlistblankiterator() ((phlistiterator) { \
+  (phiteratornext) phListNext, (phiteratorderef) phListDeref, \
+  NULL, NULL, NULL, NULL, NULL \
+})
+
 typedef struct pharray {
   phint capacity;
   void **items;
@@ -183,6 +194,11 @@ typedef struct pharrayiterator {
 #define pharrayiterator(array) ((pharrayiterator) { \
   (phiteratornext) phArrayNext, (phiteratorderef) phArrayDeref, \
   array->items - 1, array->items + array->capacity, 0 \
+})
+
+#define pharrayblankiterator() ((pharrayiterator) { \
+  (phiteratornext) phArrayNext, (phiteratorderef) phArrayDeref, \
+  NULL, NULL, 0 \
 })
 
 // Physics Types
@@ -315,28 +331,82 @@ typedef struct phddvtpairiterator {
   phddvtpair pair;
   pharrayiterator arrayItr1;
   pharrayiterator arrayItr2;
-  union {
-    struct {
-      phint capacity;
-      void **items;
-      void *_items[PH_MAX_DDVT_PARTICLES];
-    } _particles;
-    pharray particles;
-  };
+  pharray particles;
 } phddvtpairiterator;
 
 #define phddvtpairiterator(ddvt) ((phddvtpairiterator) { \
   (phiteratornext) phDdvtPairNext, (phiteratorderef) phDdvtPairDeref, \
   ddvt->parent, ddvt, \
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+  phlistblankiterator(), \
+  phlistblankiterator(), \
   NULL, NULL, \
-  NULL, NULL, NULL, NULL, 0, \
-  NULL, NULL, NULL, NULL, 0, \
-  0, NULL \
+  pharrayblankiterator(), \
+  pharrayblankiterator(), \
+  pharray(0, NULL) \
 })
 
+#define phddvtpairblankiterator(ddvt) ((phddvtpairiterator) { \
+  (phiteratornext) phDdvtPairNext, (phiteratorderef) phDdvtPairDeref, \
+  NULL, NULL, \
+  phlistblankiterator(), \
+  phlistblankiterator(), \
+  NULL, NULL, \
+  pharrayblankiterator(), \
+  pharrayblankiterator(), \
+  pharray(0, NULL) \
+})
+
+typedef struct phcollisionlist {
+  phlist collisions;
+  phlist nextCollisions;
+} phcollisionlist;
+
+#if PH_THREAD
+
+typedef void (*phthreadhandle)(void *);
+
+typedef struct phthreadctrl {
+  pthread_cond_t endCond;
+  pthread_mutex_t endMutex;
+  phthreadhandle handle;
+  pharray threads;
+} phthreadctrl;
+
+#define phthreadctrl() ((phthreadctrl) { \
+  PTHREAD_COND_INITIALIZER, \
+  PTHREAD_MUTEX_INITIALIZER, \
+  NULL, \
+  pharray(0, NULL) \
+})
+
+typedef struct phthread {
+  pthread_t thread;
+  phthreadctrl *ctrl;
+  pthread_cond_t step;
+  pthread_mutex_t active;
+  phbool signalCtrl;
+  void *data;
+} phthread;
+
+#define phthread() ((phthread) { \
+  0, NULL, \
+  PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, \
+  1, NULL \
+})
+
+typedef struct phparticletestthreaddata {
+  phlist ddvts;
+  phcollisionlist collisions;
+} phparticletestthreaddata;
+
+#define phparticletestthreaddata() ((phparticletestthreaddata) { \
+  phlist(), phlist(), phlist() \
+})
+
+#endif
+
 typedef struct phworld {
+  phint particlesAlive;
   phlist particles;
   pharray particleArray;
   phint particleIndex;
@@ -357,17 +427,30 @@ typedef struct phworld {
   struct {
     phbox box;
     phddvt ddvt;
-    phlist collisions;
-    phlist nextCollisions;
+    phcollisionlist collisions;
   } _optimization;
   struct {
     phlist garbage;
     phlist next;
   } _garbage;
-  phint particlesAlive;
+  #if PH_THREAD
+  phthreadctrl threadCtrl;
+  pharray particleTestThreadData;
+  #endif
 } phworld;
 
+#if PH_THREAD
+#define _phworldend \
+  phlist(), phlist(), \
+  phthreadctrl(), \
+  pharray(0, NULL)
+#else
+#define _phworldend \
+  phlist(), phlist()
+#endif
+
 #define phworld(box) ((phworld) { \
+  0, \
   phlist(), \
   pharray(0, NULL), 0, \
   phlist(), \
@@ -375,8 +458,7 @@ typedef struct phworld {
   1, 20, \
   0, 1 / 60.0, 0, 10, \
   box, phddvt(NULL, box, 4, 16), phlist(), phlist(), \
-  phlist(), phlist(), \
-  0 \
+  _phworldend \
 })
 
 typedef struct phworldparticleiterator {

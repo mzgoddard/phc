@@ -38,7 +38,10 @@ void test_world() {
       world._optimization.ddvt.length
     );
     phWorldStep(&world, 0.02);
-    ok(world._optimization.collisions.length == 0, "collisions is empty");
+    ok(
+      world._optimization.collisions.collisions.length == 0,
+      "collisions is empty"
+    );
     ok(phMag(phSub(p.position, phv(0, 0))) > 0.001, "particle moved");
     ok(phMag(phSub(q.position, phv(0.5, 0))) > 0.001, "other particle moved");
     phWorldDump(&world);

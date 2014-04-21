@@ -7,36 +7,199 @@ void phWorldDump(phworld *self) {
   phDump(&self->constraints.beforeStep, NULL);
   phDump(&self->constraints.afterStep, NULL);
   phDdvtDump(&self->_optimization.ddvt);
-  phDump(&self->_optimization.collisions, free);
-  phDump(&self->_optimization.nextCollisions, free);
+  phDump(&self->_optimization.collisions.collisions, free);
+  phDump(&self->_optimization.collisions.nextCollisions, free);
   phDump(&self->_garbage.garbage, free);
   phDump(&self->_garbage.next, free);
 }
 
-static phcollision *_phWorldNextCollision(phworld *self) {
-  // phlistiterator _litr;
-  // phiterator *itr = phIterator(&self->_optimization.nextCollisions, &_litr);
+static phcollision *_phNextCollision(phcollisionlist *self) {
   phcollision *col;
   // Get the first collision or create a new one.
-  if (self->_optimization.nextCollisions.first) {
-    col = self->_optimization.nextCollisions.first->item;
+  if (self->nextCollisions.first) {
+    col = self->nextCollisions.first->item;
   } else {
     col = phAlloc(phcollision);
-    phAppend(&self->_optimization.nextCollisions, col);
+    phAppend(&self->nextCollisions, col);
   }
   return col;
 }
 
-static void _phWorldSaveCollision(phworld *self) {
-  phcollision *col = phShift(&self->_optimization.nextCollisions);
-  if (!self->_optimization.collisions.freeList) {
-    self->_optimization.nextCollisions.freeList =
-      (self->_optimization.collisions.freeList =
-        self->_optimization.nextCollisions.freeList)->next;
-    self->_optimization.collisions.freeList->next = NULL;
+static void _phSaveCollision(phcollisionlist *self) {
+  phcollision *col = phShift(&self->nextCollisions);
+  if (!self->collisions.freeList) {
+    self->nextCollisions.freeList =
+      (self->collisions.freeList =
+        self->nextCollisions.freeList)->next;
+    self->collisions.freeList->next = NULL;
   }
-  phAppend(&self->_optimization.collisions, col);
+  phAppend(&self->collisions, col);
 }
+
+static void _phResetCollisions(phcollisionlist *self) {
+  // Empty collisions into nextCollisions.
+  phlist *collisions = &self->collisions;
+  phlist *nextCollisions = &self->nextCollisions;
+  if (collisions->length > nextCollisions->length) {
+    phlist tmp = *collisions;
+    *collisions = *nextCollisions;
+    *nextCollisions = tmp;
+  }
+  if (collisions->length) {
+    collisions->last->next = nextCollisions->first;
+    if (nextCollisions->first) {
+      nextCollisions->first->prev = collisions->last;
+    }
+    nextCollisions->first = collisions->first;
+    if (!nextCollisions->last) {
+      nextCollisions->last = collisions->last;
+    }
+    collisions->first = NULL;
+    collisions->last = NULL;
+    nextCollisions->length += collisions->length;
+    collisions->length = 0;
+  }
+}
+
+static void _phSolveCollisions(phcollisionlist *self) {
+  phlistiterator _litr;
+  phiterator *itr = phIterator(&self->collisions, &_litr);
+  while (phListNext((phlistiterator *) itr)) {
+    // phcollision *col = phListDeref((phlistiterator *) itr);
+    phcollision *col = _litr.node->item;
+    phSolve(col->a, col->b, col);
+  }
+
+  _phResetCollisions(self);
+}
+
+static void _phDdvtTestParticles(phddvt *self, phcollisionlist *collisions) {
+  phcollision *nextCollision = _phNextCollision(collisions);
+  phparticle **items = (phparticle **) self->_particleArray.items;
+  phint length = self->length;
+  for (phint i = 0; length - i; ++i) {
+    phparticle *a = items[i];
+    phbox boxA = a->_worldData.oldBox;
+    for (phint j = i + 1; length - j; ++j) {
+      phparticle *b = items[j];
+      phbox boxB = b->_worldData.oldBox;
+
+      // Pre test with boxes, which is cheaper than circle test. Then
+      // circle test.
+      if (phIntersect(boxA, boxB) && phTest(a, b, nextCollision)) {
+        nextCollision->a = a;
+        nextCollision->b = b;
+        _phSaveCollision(collisions);
+        nextCollision = _phNextCollision(collisions);
+      }
+    }
+  }
+}
+
+#if PH_THREAD
+
+void _phParticleTestThreadHandle(phparticletestthreaddata *self) {
+  if (self->ddvts.length) {
+    phlistiterator _litr;
+    phIterator(&self->ddvts, &_litr);
+    while (phListNext(&_litr)) {
+      _phDdvtTestParticles(_litr.node->item, &self->collisions);
+    }
+    phClean(&self->ddvts, NULL);
+  }
+}
+
+void * _phThreadMain(void *_self) {
+  phthread *self = _self;
+  pthread_mutex_lock(&self->active);
+
+  while (1) {
+    if (self->signalCtrl) {
+      pthread_mutex_lock(&self->ctrl->endMutex);
+      pthread_cond_signal(&self->ctrl->endCond);
+      pthread_mutex_unlock(&self->ctrl->endMutex);
+    }
+    pthread_cond_wait(&self->step, &self->active);
+
+    self->ctrl->handle(self->data);
+  }
+
+  return NULL;
+}
+
+static void _phThreadInit(phthread *self, phthreadctrl *ctrl) {
+  *self = phthread();
+  pthread_cond_init(&self->step, NULL);
+  pthread_mutex_init(&self->active, NULL);
+  self->ctrl = ctrl;
+
+  pthread_create(&self->thread, NULL, _phThreadMain, self);
+  pthread_cond_wait(&self->ctrl->endCond, &self->ctrl->endMutex);
+  pthread_mutex_lock(&self->active);
+}
+
+static void _phThreadInitGroup(phthreadctrl *self, phint num) {
+  self->threads = pharray(num, calloc(num, sizeof(phthread *)));
+  for (phint i = 0, l = self->threads.capacity; i < l; ++i) {
+    phthread *thread = self->threads.items[i] = phAlloc(phthread);
+    _phThreadInit(thread, self);
+    if (!i) {
+      thread->signalCtrl = 0;
+    }
+  }
+}
+
+static void _phThreadCtrlInit(phthreadctrl *self, phworld *w) {
+  *self = phthreadctrl();
+  pthread_cond_init(&self->endCond, NULL);
+  pthread_mutex_init(&self->endMutex, NULL);
+  pthread_mutex_lock(&self->endMutex);
+
+  phint cpus = sysconf(_SC_NPROCESSORS_ONLN);
+
+  _phThreadInitGroup(self, cpus);
+}
+
+static void _phParticleTestDataInit(pharray *self, phint num) {
+  *self = pharray(num, calloc(num, sizeof(phparticletestthreaddata *)));
+  for (phint i = 0, l = self->capacity; i < l; ++i) {
+    phparticletestthreaddata *data = self->items[i] =
+      phAlloc(phparticletestthreaddata);
+    *data = phparticletestthreaddata();
+  }
+}
+
+static void _phThreadCtrlRun(
+  phthreadctrl *self, phthreadhandle handle, pharray *data
+) {
+  self->handle = handle;
+
+  // Activate threads.
+  phint activeThreads = 0;
+  for (phint i = 0, l = data->capacity; i < l; ++i) {
+    phthread *thread = self->threads.items[i];
+    thread->data = data->items[i];
+    pthread_cond_signal(&thread->step);
+    pthread_mutex_unlock(&thread->active);
+    activeThreads++;
+  }
+  // Wait for one of the threads to say its done.
+  pthread_cond_wait(&self->endCond, &self->endMutex);
+  // Loop while yielding until all threads are done.
+  while (activeThreads) {
+    pthread_mutex_unlock(&self->endMutex);
+    sched_yield();
+    pthread_mutex_lock(&self->endMutex);
+    for (phint i = 0, l = data->capacity; i < l; ++i) {
+      phthread *thread = self->threads.items[i];
+      if (!pthread_mutex_trylock(&thread->active)) {
+        activeThreads--;
+      }
+    }
+  }
+}
+
+#endif
 
 void phWorldInternalStep(phworld *self) {
   self->timing.insideStep = 1;
@@ -72,65 +235,59 @@ void phWorldInternalStep(phworld *self) {
   }
 
   // test and unsleep
-  phddvtpairiterator _ditr;
-  itr = phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
-  phcollision *nextCollision = _phWorldNextCollision(self);
-  while (phDdvtPairNext((phddvtpairiterator *) itr)) {
-    items = (phparticle **) _ditr.particles.items;
-    phint length = _ditr.ddvt->length;
-    for (phint i = 0; length - i; ++i) {
-      phparticle *a = items[i];
-      phbox boxA = a->_worldData.oldBox;
-      for (phint j = i + 1; length - j; ++j) {
-        phparticle *b = items[j];
-        phbox boxB = b->_worldData.oldBox;
+  #if PH_THREAD
+  if (!self->threadCtrl.threads.items) {
+    _phThreadCtrlInit(&self->threadCtrl, self);
+  }
+  if (!self->particleTestThreadData.items) {
+    _phParticleTestDataInit(
+      &self->particleTestThreadData, self->threadCtrl.threads.capacity
+    );
+  }
 
-        // Pre test with boxes, which is cheaper than circle test. Then
-        // circle test.
-        if (
-          phIntersect(boxA, boxB) &&
-            phTest(a, b, nextCollision)
-        ) {
-          nextCollision->a = a;
-          nextCollision->b = b;
-          _phWorldSaveCollision(self);
-          nextCollision = _phWorldNextCollision(self);
-        }
+  // Clean list of ddvts that threads will be responsible for.
+  // for (phint i = 0, l = self->threadCtrl.threads.capacity; i < l; ++i) {
+  //   phparticletestthreaddata *data = self->particleTestThreadData.items[i];
+  //   phClean(&data->ddvts, NULL);
+  // }
+  // Build list of ddvts that threads will test.
+  {
+    phint i = 0;
+    phint numThreads = self->threadCtrl.threads.capacity;
+    phddvtpairiterator _ditr;
+    phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
+    while (phDdvtPairNext(&_ditr)) {
+      _ditr.arrayItr1.test = 0;
+      phparticletestthreaddata *data = self->particleTestThreadData.items[i];
+      phAppend(&data->ddvts, _ditr.ddvt);
+      if (++i >= numThreads) {
+        i = 0;
       }
     }
+  }
+  _phThreadCtrlRun(
+    &self->threadCtrl,
+    (void (*)(void *)) _phParticleTestThreadHandle,
+    &self->particleTestThreadData
+  );
+  #else
+  phddvtpairiterator _ditr;
+  itr = phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
+  while (phDdvtPairNext((phddvtpairiterator *) itr)) {
+    _phDdvtTestParticles(_ditr.ddvt, &self->_optimization.collisions);
     _ditr.arrayItr1.test = 0;
   }
+  #endif
 
   // solve
-  itr = phIterator(&self->_optimization.collisions, &_litr);
-  while (phListNext((phlistiterator *) itr)) {
-    // phcollision *col = phListDeref((phlistiterator *) itr);
-    phcollision *col = _litr.node->item;
-    phSolve(col->a, col->b, col);
+  #if PH_THREAD
+  for (phint i = 0, l = self->threadCtrl.threads.capacity; i < l; ++i) {
+    phparticletestthreaddata *data = self->particleTestThreadData.items[i];
+    _phSolveCollisions(&data->collisions);
   }
-
-  // Empty collisions into nextCollisions.
-  phlist *collisions = &self->_optimization.collisions;
-  phlist *nextCollisions = &self->_optimization.nextCollisions;
-  if (collisions->length > nextCollisions->length) {
-    phlist tmp = *collisions;
-    *collisions = *nextCollisions;
-    *nextCollisions = tmp;
-  }
-  if (collisions->length) {
-    collisions->last->next = nextCollisions->first;
-    if (nextCollisions->first) {
-      nextCollisions->first->prev = collisions->last;
-    }
-    nextCollisions->first = collisions->first;
-    if (!nextCollisions->last) {
-      nextCollisions->last = collisions->last;
-    }
-    collisions->first = NULL;
-    collisions->last = NULL;
-    nextCollisions->length += collisions->length;
-    collisions->length = 0;
-  }
+  #else
+  _phSolveCollisions(&self->_optimization.collisions);
+  #endif
 
   // post constraint
   itr = phIterator(&self->constraints.afterStep, &_litr);

@@ -6,6 +6,13 @@ import subprocess
 def options(ctx):
     ctx.load('compiler_c')
 
+    ctx.add_option(
+        '--threads',
+        action='store_true',
+        default=False,
+        help='enable thread support'
+    )
+
 import waflib.Logs
 def configure(ctx):
     CC = os.environ['CC']
@@ -34,10 +41,18 @@ def configure(ctx):
     # except:
     #     pass
 
-    # ctx.env.append_value('CFLAGS', '-g')
+    ctx.env.append_value('CFLAGS', '-g')
     ctx.env.append_value('CFLAGS', '-O3' if CC != 'emcc' else '-O2')
-    ctx.env.append_value('CFLAGS', '-std=c99')
+    ctx.env.append_value('CFLAGS', '-std=c11')
     ctx.env.append_value('LINKFLAGS', '-O4' if CC != 'emcc' else '-O2')
+
+    ctx.start_msg('enable threads')
+    if ctx.options.threads:
+        ctx.env.append_value('CFLAGS', '-pthread')
+        ctx.env.append_value('DEFINES', 'PH_THREAD=1')
+        ctx.end_msg('yes', 'GREEN')
+    else:
+        ctx.end_msg('no', 'YELLOW')
 
     if CC == 'emcc':
         ctx.env.append_value('CFLAGS', '-s')
