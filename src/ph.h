@@ -216,6 +216,7 @@ typedef struct phparticleworlddata {
   pharray collideWith;
   phint collideWithIndex;
   void *topDdvt;
+  phbool inLeafDdvt;
   phv oldPosition;
   phbox box, oldBox;
 } phparticleworlddata;
@@ -240,7 +241,7 @@ typedef struct phparticle {
 } phparticle;
 
 #define phparticleworlddata(oldBox) ((phparticleworlddata) { \
-  0, pharray(0, NULL), 0, NULL, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
+  0, pharray(0, NULL), 0, NULL, 0, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
 })
 
 #define phparticle(pos) ((phparticle) { \
@@ -358,8 +359,14 @@ typedef struct phddvtpairiterator {
 
 typedef struct phcollisionlist {
   phlist collisions;
+  phlist inBoxCollisions;
+  phlist outBoxCollisions;
   phlist nextCollisions;
 } phcollisionlist;
+
+#define phcollisionlist() ((phcollisionlist) { \
+  phlist(), phlist(), phlist(), phlist() \
+})
 
 #if PH_THREAD
 
@@ -410,7 +417,7 @@ typedef struct phparticletestthreaddata {
 } phparticletestthreaddata;
 
 #define phparticletestthreaddata() ((phparticletestthreaddata) { \
-  phlist(), phlist(), phlist() \
+  phlist(), phcollisionlist() \
 })
 
 typedef struct phparticlesolvethreaddata {
@@ -447,6 +454,7 @@ typedef struct phworld {
     phbox box;
     phddvt ddvt;
     phcollisionlist collisions;
+    phlist shouldUpdate;
   } _optimization;
   struct {
     phlist garbage;
@@ -480,7 +488,8 @@ typedef struct phworld {
   phlist(), phlist(), \
   1, 20, \
   0, 1 / 60.0, 0, 10, \
-  box, phddvt(NULL, box, 4, 16), phlist(), phlist(), \
+  box, phddvt(NULL, box, 4, 16), phcollisionlist(), \
+  phlist(), \
   _phworldend \
 })
 
@@ -875,6 +884,7 @@ void phSolve(phparticle *, phparticle *, phcollision *);
 // Ignore another particle or it's data.
 void phIgnore(phparticle *, void *);
 void phStopIgnore(phparticle *, void *);
+phbool phIgnoresOther(phparticle *, void *);
 phv phVelocity(phparticle *);
 phv phScaledVelocity(phparticle *, phdouble dt);
 void phSetVelocity(phparticle *, phv);

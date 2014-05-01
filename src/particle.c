@@ -67,7 +67,7 @@ static phbool _phHasCollidedAlready(phparticle *self, phparticle *other) {
   return 0;
 }
 
-static phbool _phIgnoresOther(phparticle *self, void *other) {
+phbool phIgnoresOther(phparticle *self, void *other) {
   phlistiterator _listitr;
   return phStaticContains(
     (phiteratornext) phListNext, (phiteratorderef) phListDeref,
@@ -118,7 +118,7 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
 
   ingress = abx*abx+aby*aby;
   if (((ingress < abr*abr))) {
-    if (_phIgnoresOther(self, other) || _phIgnoresOther(self, other->data)) {
+    if (phIgnoresOther(self, other) || phIgnoresOther(self, other->data)) {
       return 0;
     }
 
