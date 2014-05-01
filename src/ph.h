@@ -394,6 +394,16 @@ typedef struct phthread {
   1, NULL \
 })
 
+typedef struct phparticleintegratethreaddata {
+  pharrayiterator particleItr;
+  phlist shouldUpdate;
+  void *world;
+} phparticleintegratethreaddata;
+
+#define phparticleintegratethreaddata() ((phparticleintegratethreaddata) { \
+  pharrayblankiterator(), phlist(), NULL \
+})
+
 typedef struct phparticletestthreaddata {
   phlist ddvts;
   phcollisionlist collisions;
@@ -401,6 +411,15 @@ typedef struct phparticletestthreaddata {
 
 #define phparticletestthreaddata() ((phparticletestthreaddata) { \
   phlist(), phlist(), phlist() \
+})
+
+typedef struct phparticlesolvethreaddata {
+  phlist *collisions;
+  phlist unsolved;
+} phparticlesolvethreaddata;
+
+#define phparticlesolvethreaddata() ((phparticlesolvethreaddata) { \
+  NULL, phlist() \
 })
 
 #endif
@@ -435,7 +454,9 @@ typedef struct phworld {
   } _garbage;
   #if PH_THREAD
   phthreadctrl threadCtrl;
+  pharray particleIntegrateThreadData;
   pharray particleTestThreadData;
+  pharray particleSolveThreadData;
   #endif
 } phworld;
 
@@ -443,6 +464,8 @@ typedef struct phworld {
 #define _phworldend \
   phlist(), phlist(), \
   phthreadctrl(), \
+  pharray(0, NULL), \
+  pharray(0, NULL), \
   pharray(0, NULL)
 #else
 #define _phworldend \

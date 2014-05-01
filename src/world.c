@@ -98,6 +98,27 @@ static void _phDdvtTestParticles(phddvt *self, phcollisionlist *collisions) {
 
 #if PH_THREAD
 
+void _phParticleIntegrateThreadHandle(phparticleintegratethreaddata *self) {
+  phdouble dt = ((phworld *) self->world)->timing.dt;
+  phparticle **items = (phparticle **) self->particleItr.items;
+  phparticle **end = (phparticle **) self->particleItr.end;
+  // for (phint i = 0, l = self->particleIndex; l - i; ++i) {
+  for (; items < end; ++items) {
+    phparticle *particle = *items;
+    phIntegrate(particle, dt);
+    phTestReset(particle);
+    phv position = particle->position;
+    phv oldPosition = particle->_worldData.oldPosition;
+    phdouble radius = particle->radius;
+    // Update particle in ddvt
+    if (
+      phMag2(phSub(position, oldPosition)) > radius * radius / 10
+    ) {
+      phAppend(&self->shouldUpdate, particle);
+    }
+  }
+}
+
 void _phParticleTestThreadHandle(phparticletestthreaddata *self) {
   if (self->ddvts.length) {
     phlistiterator _litr;
@@ -106,6 +127,24 @@ void _phParticleTestThreadHandle(phparticletestthreaddata *self) {
       _phDdvtTestParticles(_litr.node->item, &self->collisions);
     }
     phClean(&self->ddvts, NULL);
+  }
+}
+
+void _phParticleSolveThreadHandle(phparticlesolvethreaddata *self) {
+  phlistiterator _litr;
+  phIterator(self->collisions, &_litr);
+  while (phListNext(&_litr)) {
+    phcollision *col = _litr.node->item;
+    phparticle *a = col->a;
+    phparticle *b = col->b;
+    if (
+      !((phddvt *) a->_worldData.topDdvt)->tl &&
+        !((phddvt *) b->_worldData.topDdvt)->tl
+    ) {
+      phSolve(a, b, col);
+    } else {
+      phAppend(&self->unsolved, col);
+    }
   }
 }
 
@@ -160,12 +199,31 @@ static void _phThreadCtrlInit(phthreadctrl *self, phworld *w) {
   _phThreadInitGroup(self, cpus);
 }
 
+static void _phParticleIntegrateDataInit(pharray *self, phint num, phworld *w) {
+  *self = pharray(num, calloc(num, sizeof(phparticleintegratethreaddata *)));
+  for (phint i = 0, l = self->capacity; i < l; ++i) {
+    phparticleintegratethreaddata *data = self->items[i] =
+      phAlloc(phparticleintegratethreaddata);
+    *data = phparticleintegratethreaddata();
+    data->world = w;
+  }
+}
+
 static void _phParticleTestDataInit(pharray *self, phint num) {
   *self = pharray(num, calloc(num, sizeof(phparticletestthreaddata *)));
   for (phint i = 0, l = self->capacity; i < l; ++i) {
     phparticletestthreaddata *data = self->items[i] =
       phAlloc(phparticletestthreaddata);
     *data = phparticletestthreaddata();
+  }
+}
+
+static void _phParticleSolveDataInit(pharray *self, phint num) {
+  *self = pharray(num, calloc(num, sizeof(phparticlesolvethreaddata *)));
+  for (phint i = 0, l = self->capacity; i < l; ++i) {
+    phparticlesolvethreaddata *data = self->items[i] =
+      phAlloc(phparticlesolvethreaddata);
+    *data = phparticlesolvethreaddata();
   }
 }
 
@@ -210,9 +268,54 @@ void phWorldInternalStep(phworld *self) {
   phIterate(itr, (phitrfn) phConstraintUpdate, self);
 
   // integrate, sleep, and update ddvt
+  phddvt *ddvt = &self->_optimization.ddvt;
+  #if PH_THREAD
+  if (!self->threadCtrl.threads.items) {
+    _phThreadCtrlInit(&self->threadCtrl, self);
+  }
+  if (!self->particleIntegrateThreadData.items) {
+    _phParticleIntegrateDataInit(
+      &self->particleIntegrateThreadData,
+      self->threadCtrl.threads.capacity,
+      self
+    );
+  }
+  for (phint i = 0, l = self->threadCtrl.threads.capacity; i < l; ++i) {
+    phparticleintegratethreaddata *data =
+      self->particleIntegrateThreadData.items[i];
+    phArrayIterator(&self->particleArray, &data->particleItr);
+    phint perThread = (self->particleIndex + l - self->particleIndex % l) / l;
+    data->particleItr.items = self->particleArray.items + perThread * i;
+    data->particleItr.end = data->particleItr.items + perThread;
+    if (
+      data->particleItr.end >
+        self->particleArray.items + self->particleIndex
+    ) {
+      data->particleItr.end = self->particleArray.items + self->particleIndex;
+    }
+  }
+  _phThreadCtrlRun(
+    &self->threadCtrl,
+    (void (*)(void *)) _phParticleIntegrateThreadHandle,
+    &self->particleIntegrateThreadData
+  );
+  for (phint i = 0, l = self->threadCtrl.threads.capacity; i < l; ++i) {
+    phparticleintegratethreaddata *data =
+      self->particleIntegrateThreadData.items[i];
+    phIterator(&data->shouldUpdate, &_litr);
+    while (phListNext(&_litr)) {
+      phparticle *particle = _litr.node->item;
+      phv position = particle->position;
+      phbox newBox = phAabb(position, particle->radius);
+      phDdvtUpdate(ddvt, particle, particle->_worldData.oldBox, newBox);
+      particle->_worldData.oldPosition = position;
+      particle->_worldData.oldBox = newBox;
+    }
+    phClean(&data->shouldUpdate, NULL);
+  }
+  #else
   phbox oldBox, newBox;
   phdouble dt = self->timing.dt;
-  phddvt *ddvt = &self->_optimization.ddvt;
   phparticle **items = (phparticle **) self->particleArray.items;
   for (phint i = 0, l = self->particleIndex; l - i; ++i) {
     phparticle *particle = items[i];
@@ -233,23 +336,15 @@ void phWorldInternalStep(phworld *self) {
     }
     // If velocity is below threshold, increment counter to sleep
   }
+  #endif
 
   // test and unsleep
   #if PH_THREAD
-  if (!self->threadCtrl.threads.items) {
-    _phThreadCtrlInit(&self->threadCtrl, self);
-  }
   if (!self->particleTestThreadData.items) {
     _phParticleTestDataInit(
       &self->particleTestThreadData, self->threadCtrl.threads.capacity
     );
   }
-
-  // Clean list of ddvts that threads will be responsible for.
-  // for (phint i = 0, l = self->threadCtrl.threads.capacity; i < l; ++i) {
-  //   phparticletestthreaddata *data = self->particleTestThreadData.items[i];
-  //   phClean(&data->ddvts, NULL);
-  // }
   // Build list of ddvts that threads will test.
   {
     phint i = 0;
@@ -285,6 +380,40 @@ void phWorldInternalStep(phworld *self) {
     phparticletestthreaddata *data = self->particleTestThreadData.items[i];
     _phSolveCollisions(&data->collisions);
   }
+  // if (!self->particleSolveThreadData.items) {
+  //   _phParticleSolveDataInit(
+  //     &self->particleSolveThreadData, self->threadCtrl.threads.capacity
+  //   );
+  // }
+  // for (phint i = 0, l = self->threadCtrl.threads.capacity; i < l; ++i) {
+  //   phparticletestthreaddata *testData = self->particleTestThreadData.items[i];
+  //   phparticlesolvethreaddata *solveData =
+  //     self->particleSolveThreadData.items[i];
+  //   solveData->collisions = &testData->collisions.collisions;
+  // }
+  // _phThreadCtrlRun(
+  //   &self->threadCtrl,
+  //   (void (*)(void *)) _phParticleSolveThreadHandle,
+  //   &self->particleSolveThreadData
+  // );
+  // static phint debugPrint = 0;
+  // for (phint i = 0, l = self->threadCtrl.threads.capacity; i < l; ++i) {
+  //   phparticlesolvethreaddata *data = self->particleSolveThreadData.items[i];
+  //   if (debugPrint++ % 1000 == 0) {
+  //     printf("%d %d\n", data->unsolved.length, data->collisions->length);
+  //   }
+  //   phIterator(&data->unsolved, &_litr);
+  //   while (phListNext(&_litr)) {
+  //     // phcollision *col = phListDeref((phlistiterator *) itr);
+  //     phcollision *col = _litr.node->item;
+  //     phparticle *a = col->a;
+  //     phparticle *b = col->b;
+  //     phSolve(a, b, col);
+  //   }
+  //   phClean(&data->unsolved, NULL);
+  //   phparticletestthreaddata *testData = self->particleTestThreadData.items[i];
+  //   _phResetCollisions(&testData->collisions);
+  // }
   #else
   _phSolveCollisions(&self->_optimization.collisions);
   #endif
