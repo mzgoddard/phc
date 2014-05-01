@@ -3,13 +3,11 @@
 
 #define ddvtdata() \
   phparticle particles[8]; \
-  phparticleworlddata worlddatas[8]; \
   phddvt ddvt = phddvt(NULL, phbox(-4, 4, 4, -4), 2, 4); \
-  for (phint i = 0; i < 8; ++i) { \
+  for (phint i = 7; i >= 0; --i) { \
     particles[i] = phparticle(phv((i % 2) * 4 - 2, (i / 2 % 2) * -4 + 2)); \
-    particles[i]._worldData = &worlddatas[i]; \
     phparticle *p = &particles[i]; \
-    particles[i]._worldData->oldBox = phAabb(p->position, p->radius); \
+    particles[i]._worldData.oldBox = phAabb(p->position, p->radius); \
     phDdvtAdd(&ddvt, p); \
   }
 
@@ -19,9 +17,9 @@ void test_ddvt() {
   {
     note("phDdvtAdd");
     phparticle a = phparticle(phZero());
-    phparticleworlddata a_data = phparticleworlddata();
-    a._worldData = &a_data;
-    a._worldData->oldBox = phAabb(a.position, a.radius);
+    // phparticleworlddata a_data = phparticleworlddata();
+    // a._worldData = &a_data;
+    a._worldData.oldBox = phAabb(a.position, a.radius);
     phddvt ddvt = phddvt(NULL, phbox(-4, 4, 4, -4), 2, 4);
     phDdvtAdd(&ddvt, &a);
     ok(ddvt.length != 0, "length counts particle");
@@ -31,13 +29,13 @@ void test_ddvt() {
   {
     note("phDdvtRemove");
     phparticle a = phparticle(phZero());
-    phparticleworlddata a_data = phparticleworlddata();
-    a._worldData = &a_data;
-    a._worldData->oldBox = phAabb(a.position, a.radius);
+    // phparticleworlddata a_data = phparticleworlddata();
+    // a._worldData = &a_data;
+    a._worldData.oldBox = phAabb(a.position, a.radius);
     phddvt ddvt = phddvt(NULL, phbox(-4, 4, 4, -4), 2, 4);
     phDdvtAdd(&ddvt, &a);
     ok(ddvt.length != 0, "length counts particle");
-    phDdvtRemove(&ddvt, &a, a._worldData->oldBox);
+    phDdvtRemove(&ddvt, &a, a._worldData.oldBox);
     ok(ddvt.length == 0, "ddvt is empty now");
     phDdvtDump(&ddvt);
   }
@@ -55,9 +53,13 @@ void test_ddvt() {
     ddvtdata();
     // Remove 6
     for (phint i = 0; i < 6; ++i) {
-      phDdvtRemove(&ddvt, &particles[i], worlddatas[i].oldBox);
+      phDdvtRemove(&ddvt, &particles[i], particles[i]._worldData.oldBox);
     }
-    ok(ddvt.length == 2, "right number of particles removed");
+    ok(
+      ddvt.length == 2,
+      "right number of particles removed, %d == 2",
+      ddvt.length
+    );
     ok(ddvt.tl == NULL, "ddvt switched back to a leaf");
     phDdvtDump(&ddvt);
   }
@@ -67,7 +69,7 @@ void test_ddvt() {
     ddvtdata();
     // Remove 6
     for (phint i = 2; i < 8; ++i) {
-      phDdvtRemove(&ddvt, &particles[i], worlddatas[i].oldBox);
+      phDdvtRemove(&ddvt, &particles[i], particles[i]._worldData.oldBox);
     }
     ok(ddvt.length == 2, "right number of particles removed");
     ok(ddvt.tl == NULL, "ddvt switched back to a leaf");
@@ -85,7 +87,7 @@ void test_ddvt() {
       );
       count++;
     }
-    ok(count == 2, "iterate each element in the ddvt");
+    ok(count == 2, "iterate 2 (%d == 2) elements in the ddvt", count);
     phDdvtDump(&ddvt);
   }
 
@@ -99,8 +101,9 @@ void test_ddvt() {
       ok(phDeref(itr) != NULL, "iterator points to an object");
       // 0, 4, 1, 5, 2, 6, 3, 7
       ok(
-        phDeref(itr) == &particles[(count % 2) * 4 + (count / 2)],
-        "points at expected particle (index %d)", (count % 2) * 4 + (count / 2)
+        phDeref(itr) == &particles[((count + 1) % 2) * 4 + (count / 2)],
+        "points at expected particle (index %d)",
+        ((count + 1) % 2) * 4 + (count / 2)
       );
       count++;
     }
@@ -115,6 +118,11 @@ void test_ddvt() {
     phiterator *itr = phDdvtPairIterator(&ddvt, &ddvtitr);
     phint count = 0;
     while (phNext(itr)) {
+      // ok(ddvtitr.ddvt->_particleArray.capacity == 2, "array is length 2");
+      // ok(ddvtitr.particles.capacity == 2, "array is length 2");
+      // ok(ddvtitr.arrayItr2.items < ddvtitr.arrayItr2.end);
+      // ok(ddvtitr.arrayItr2.test);
+      // ok(ddvtitr.arrayItr2.items == ddvtitr.particles.items + 1, "itr2 points");
       phddvtpair *pair = phDeref(itr);
       ok(pair == &ddvtitr.pair, "pair is pointer to static pair iterator");
       if (pair == NULL) {
@@ -129,7 +137,7 @@ void test_ddvt() {
     ok(count == 4, "iterates over 4 pairs (iterated %d pairs)", count);
 
     for (phint i = 4; i < 8; ++i) {
-      phDdvtRemove(&ddvt, &particles[i], worlddatas[i].oldBox);
+      phDdvtRemove(&ddvt, &particles[i], particles[i]._worldData.oldBox);
     }
     ok(ddvt.tl != NULL, "still in parent mode");
     itr = phDdvtPairIterator(&ddvt, &ddvtitr);

@@ -1,12 +1,5 @@
 #include "ph.h"
 
-#define phlistnode(next, prev, item) ((phlistnode) { next, prev, item })
-
-#define phlistiterator(list, node) ((phlistiterator) { \
-  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
-  list->first, NULL, NULL \
-})
-
 void phDump(phlist *self, void (*freeItem)(void *)) {
   phlistnode *node = self->first;
 
@@ -32,24 +25,22 @@ void phDump(phlist *self, void (*freeItem)(void *)) {
   self->freeList = NULL;
 }
 
-phlist * phAppend(phlist *self, void *item) {
-  phlistnode *node;
-  if (self->freeList) {
-    node = self->freeList;
+phlist * phPrepend(phlist *self, void *item) {
+  phlistnode *node = self->freeList;
+  if (node) {
     self->freeList = self->freeList->next;
   } else {
     node = phAlloc(phlistnode);
   }
 
-  *node = phlistnode(NULL, self->last, item);
+  *node = phlistnode(self->first, NULL, item);
 
-  if (self->first == NULL) {
-    self->first = node;
+  if (!self->last) {
+    self->last = node;
+  } else {
+    self->first->prev = node;
   }
-  if (self->last != NULL) {
-    self->last->next = node;
-  }
-  self->last = node;
+  self->first = node;
 
   self->length++;
   return self;
@@ -97,22 +88,51 @@ phlist * phInsert(phlist *self, int index, void *item) {
 phlist * phRemove(phlist *self, void *item) {
   phlistnode *node = self->first;
 
-  while (node != NULL && node->item != item) {
-    node = node->next;
+  if (!node) {
+    return self;
   }
+  while (node->item != item && (node = node->next)) {}
 
-  if (node != NULL) {
-    if (node->prev != NULL) {
+  if (node) {
+    if (node->prev) {
       node->prev->next = node->next;
-    }
-    if (node->next != NULL) {
-      node->next->prev = node->prev;
-    }
-
-    if (self->first == node) {
+    } else {
       self->first = node->next;
     }
-    if (self->last == node) {
+
+    if (node->next) {
+      node->next->prev = node->prev;
+    } else {
+      self->last = node->prev;
+    }
+
+    node->next = self->freeList;
+    self->freeList = node;
+
+    self->length--;
+  }
+
+  return self;
+}
+
+phlist * phRemoveLast(phlist *self, void *item) {
+  phlistnode *node = self->last;
+
+  if (!node) {
+    return self;
+  }
+  while (node->item != item && (node = node->prev)) {}
+
+  if (node) {
+    if (node->prev) {
+      node->prev->next = node->next;
+    } else {
+      self->first = node->next;
+    }
+
+    if (node->next) {
+      node->next->prev = node->prev;
+    } else {
       self->last = node->prev;
     }
 

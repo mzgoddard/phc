@@ -46,13 +46,3 @@ void * phGetIndex(phiterator *self, phint index) {
 phbool phSame(void *ctx, void *item) {
   return ctx == item;
 }
-
-pharray * phToArray(phiterator *self, pharray *ary) {
-  phint i = 0;
-  phint capacity = ary->capacity;
-  void **items = ary->items;
-  for (; i < capacity && phNext(self); ++i, items++) {
-    *items = phDeref(self);
-  }
-  return ary;
-}

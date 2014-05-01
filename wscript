@@ -6,9 +6,23 @@ import subprocess
 def options(ctx):
     ctx.load('compiler_c')
 
+    ctx.add_option(
+        '--threads',
+        action='store_true',
+        default=False,
+        help='enable thread support'
+    )
+
 import waflib.Logs
 def configure(ctx):
+    CC = os.environ['CC']
+    if os.environ['CC'] == 'emcc':
+        del os.environ['CC']
     ctx.load('compiler_c')
+
+    if CC == 'emcc':
+        ctx.env.CC = ['emcc']
+        ctx.env.LINK_CC = ['emcc']
 
     # Last time debugged with clang it created invalid paths in the debug data
     # which lead to missing function debug data for *.c code.
@@ -28,9 +42,28 @@ def configure(ctx):
     #     pass
 
     ctx.env.append_value('CFLAGS', '-g')
-    ctx.env.append_value('CFLAGS', '-O3')
-    ctx.env.append_value('CFLAGS', '-std=c99')
-    ctx.env.append_value('LINKFLAGS', '-O3')
+    ctx.env.append_value('CFLAGS', '-O3' if CC != 'emcc' else '-O2')
+    ctx.env.append_value('CFLAGS', '-std=c11')
+    ctx.env.append_value('LINKFLAGS', '-O4' if CC != 'emcc' else '-O2')
+
+    ctx.start_msg('enable threads')
+    if ctx.options.threads:
+        ctx.env.append_value('CFLAGS', '-pthread')
+        ctx.env.append_value('DEFINES', 'PH_THREAD=1')
+        ctx.end_msg('yes', 'GREEN')
+    else:
+        ctx.end_msg('no', 'YELLOW')
+
+    if CC == 'emcc':
+        ctx.env.append_value('CFLAGS', '-s')
+        ctx.env.append_value('CFLAGS', 'ASM_JS=1')
+        ctx.env.append_value('CFLAGS', '-s')
+        ctx.env.append_value('CFLAGS', 'FUNCTION_POINTER_ALIGNMENT=1')
+        ctx.env.append_value('LINKFLAGS', '-s')
+        ctx.env.append_value('LINKFLAGS', 'ASM_JS=1')
+        ctx.env.append_value('LINKFLAGS', '-s')
+        ctx.env.append_value('LINKFLAGS', 'TOTAL_MEMORY=67108864')
+        ctx.env.cprogram_PATTERN = '%s.html'
 
     ctx.start_msg( 'init submodules' )
     gitStatus = ctx.exec_command( 'git submodule init && git submodule update' )
@@ -40,7 +73,10 @@ def configure(ctx):
         ctx.fatal( 'fail' )
 
     ctx.start_msg( 'build libtap dependency' )
-    libtapStatus = ctx.exec_command( 'cd vendor/libtap && make' )
+    if CC == 'emcc':
+        libtapStatus = ctx.exec_command( 'cd vendor/libtap && CC=emcc AR=emar make clean libtap.a' )
+    else:
+        libtapStatus = ctx.exec_command( 'cd vendor/libtap && make clean all' )
     if libtapStatus == 0:
         ctx.end_msg( 'ok', 'GREEN' )
     else:
@@ -50,16 +86,42 @@ def configure(ctx):
 
     ctx.setenv('sdl', cc_env)
     try:
-        ctx.check_cfg(
-            path='sdl-config', args='--cflags --libs',
-            package='', uselib_store='SDL'
-        )
+        # if CC == 'emcc':
+        #     raise Exception('sdl-example does not yet support emscripten')
+        if CC == 'emcc':
+            ctx.env.cprogram_PATTERN = '%s.html'
+        else:
+            ctx.check_cfg(
+                path='sdl-config', args='--cflags --libs',
+                package='', uselib_store='SDL'
+            )
 
-        ctx.env.FRAMEWORK = [ 'Cocoa', 'OpenGL' ]
+            ctx.env.FRAMEWORK = [ 'Cocoa', 'OpenGL' ]
     except:
         ctx.env.DISABLED = True
 
+from waflib.TaskGen import after_method,before_method,feature,taskgen_method,extension
+
+from waflib import Task
+
+from waflib.Node import Node
+
+# relative include paths for emcc
+@feature('c','cxx','d','asm','fc','includes')
+@after_method('propagate_uselib_vars','process_source','apply_incpaths')
+def apply_incpaths_emcc(self):
+    if self.env.CC[0] == 'emcc':
+        lst=self.to_incnodes(
+            self.to_list(getattr(self,'includes',[])) +
+                self.env['INCLUDES']
+        )
+        self.includes_nodes=lst
+        self.env['INCPATHS'] = [x.path_from(self.bld.bldnode) for x in lst]
+
 def build(bld):
+    # Force emscripten to optimize compiled objects.
+    os.environ['EMCC_OPTIMIZE_NORMALLY'] = '1'
+
     bld.install_files( '${PREFIX}/include', 'src/ph.h' )
 
     source = bld.path.ant_glob('src/*.c')
@@ -71,10 +133,13 @@ def build(bld):
         'lib': 'm'
     }
     bld.stlib( **d )
-    bld.shlib( **d )
+    # bld.shlib( **d )
 
     bld.program(
-        source=bld.path.ant_glob('test/*.c'),
+        source=bld.path.ant_glob('src/*.c test/*.c'),
+        defines=
+            'PH_DDVT_PARTICLES_SUBDIVIDE=self->maxParticles ' +
+            'PH_DDVT_PARTICLES_JOIN=self->minParticles',
         includes='src ../vendor/libtap',
         target='ph-test',
         libpath='../vendor/libtap',
@@ -93,16 +158,26 @@ def build(bld):
         install_path=None
     )
 
+    bld.program(
+        source=bld.path.ant_glob('example/simple/*.c example/bench/*.c'),
+        includes='src',
+        target='ph-stress',
+        lib='m',
+        use='ph',
+        install_path=None
+    )
+
     # Build sdl example if it was able to configure.
     if 'sdl' in bld.all_envs and not bld.all_envs['sdl']['DISABLED']:
         bld.env = bld.all_envs['sdl']
 
         bld.program(
-            source=bld.path.ant_glob('example/sdl/*.c'),
+            source=bld.path.ant_glob('example/simple/*.c example/sdl/*.c'),
             includes='src',
+            defines='FRAMESTATS=1',
             target='sdl-example',
             lib='m',
-            framework=['Cocoa', 'OpenGL'],
+            framework=['Cocoa', 'OpenGL'] if bld.env.CC[0] != 'emcc' else [],
             use='ph SDL',
             install_path=None
         )

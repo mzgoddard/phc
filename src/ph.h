@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <tgmath.h>
 
+#if PH_THREAD
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
+#endif
+
 // https://groups.google.com/forum/#!topic/comp.std.c/d-6Mj5Lko_s
 #define PP_NARG(...) \
   PP_NARG_(__VA_ARGS__,PP_RSEQ_N())
@@ -118,6 +124,8 @@ typedef struct phlistnode {
   void *item;
 } phlistnode;
 
+#define phlistnode(next, prev, item) ((phlistnode) { next, prev, item })
+
 typedef struct phlist {
   phlistnode *first, *last, *freeList;
   phint length;
@@ -147,6 +155,16 @@ typedef struct phlistiterator {
 //   phlistnode fakeHead;
 // } _phlistiterator;
 
+#define phlistiterator(list, node) ((phlistiterator) { \
+  (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
+  list->first, NULL, NULL \
+})
+
+#define phlistblankiterator() ((phlistiterator) { \
+  (phiteratornext) phListNext, (phiteratorderef) phListDeref, \
+  NULL, NULL, NULL, NULL, NULL \
+})
+
 typedef struct pharray {
   phint capacity;
   void **items;
@@ -159,23 +177,28 @@ typedef struct pharray {
 })
 
 typedef struct pharrayiterator {
-  void *_value1;
-  void *_value2;
-  void **_value3;
-  void **_value4;
-  phbool _value5;
-} pharrayiterator;
-
-typedef struct _pharrayiterator {
   phiterator iterator;
   void **items;
   void **end;
   phbool test;
-} _pharrayiterator;
+} pharrayiterator;
+
+#define _pharrayiterator pharrayiterator
+// typedef struct _pharrayiterator {
+//   phiterator iterator;
+//   void **items;
+//   void **end;
+//   phbool test;
+// } _pharrayiterator;
 
 #define pharrayiterator(array) ((pharrayiterator) { \
   (phiteratornext) phArrayNext, (phiteratorderef) phArrayDeref, \
   array->items - 1, array->items + array->capacity, 0 \
+})
+
+#define pharrayblankiterator() ((pharrayiterator) { \
+  (phiteratornext) phArrayNext, (phiteratorderef) phArrayDeref, \
+  NULL, NULL, 0 \
 })
 
 // Physics Types
@@ -189,7 +212,11 @@ typedef struct phcollision {
 
 typedef struct phparticleworlddata {
   phint sleepCounter;
-  phlist collideWith;
+  // phlist collideWith;
+  pharray collideWith;
+  phint collideWithIndex;
+  void *topDdvt;
+  phbool inLeafDdvt;
   phv oldPosition;
   phbox box, oldBox;
 } phparticleworlddata;
@@ -210,8 +237,12 @@ typedef struct phparticle {
     struct phparticle *, struct phparticle *, struct phcollision *
   );
 
-  phparticleworlddata *_worldData;
+  phparticleworlddata _worldData;
 } phparticle;
+
+#define phparticleworlddata(oldBox) ((phparticleworlddata) { \
+  0, pharray(0, NULL), 0, NULL, 0, phv(0, 0), phbox(0, 0, 0, 0), oldBox \
+})
 
 #define phparticle(pos) ((phparticle) { \
   pos, pos, phZero(), \
@@ -219,20 +250,35 @@ typedef struct phparticle {
   0, 0, 0, phlist(), \
   ~0, ~0, \
   NULL, NULL, \
-  NULL \
+  phparticleworlddata(phbox(0, 0, 0, 0)) \
 })
 
-#define phparticleworlddata(oldBox) ((phparticleworlddata) { \
-  0, phlist(), phv(0, 0), phbox(0, 0, 0, 0), oldBox \
-})
+#ifndef PH_DDVT_PARTICLES_JOIN
+// #define PH_DDVT_PARTICLES_JOIN self->minParticles
+// TODO: static number here is faster but will fail tests. Need to make tests
+// compile with their own values, (or not tests compile with static).
+#define PH_DDVT_PARTICLES_JOIN 4
+#endif
+
+#ifndef PH_DDVT_PARTICLES_SUBDIVIDE
+// #define PH_DDVT_PARTICLES_SUBDIVIDE self->maxParticles
+#define PH_DDVT_PARTICLES_SUBDIVIDE 16
+#endif
+
+#ifndef PH_MAX_DDVT_PARTICLES
+#define PH_MAX_DDVT_PARTICLES 256
+#endif
 
 typedef struct phddvt {
   phbox box;
-  phlist particles;
+  // phlist particles;
   phint length;
+  pharray _particleArray;
+  phint _dirtyParticles;
   phint minParticles;
   phint maxParticles;
   phbool isSleeping;
+  void *_particleItems[PH_MAX_DDVT_PARTICLES];
   struct phddvt *parent;
   union {
     struct phddvt *children[4];
@@ -256,7 +302,7 @@ typedef struct phddvtpair {
 } phddvtpair;
 
 #define phddvt(parent, box, min, max) ((phddvt) { \
-  box, phlist(), 0, min, max, 0, \
+  box, 0, pharray(0, NULL), 0, min, max, 0, {}, \
   parent, NULL, NULL, NULL, NULL \
 })
 
@@ -267,12 +313,14 @@ typedef struct phddvtiterator {
   phddvt *topDdvt;
   phddvt *ddvt;
   phlistiterator leafItr;
+  pharrayiterator arrayItr;
 } phddvtiterator;
 
 #define phddvtiterator(ddvt) ((phddvtiterator) { \
   (phiteratornext) phDdvtNext, (phiteratorderef) phDdvtDeref, \
   ddvt->parent, ddvt, \
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL \
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+  NULL, NULL, NULL, NULL, 0, \
 })
 
 typedef struct phddvtpairiterator {
@@ -282,18 +330,112 @@ typedef struct phddvtpairiterator {
   phlistiterator leafItr1;
   phlistiterator leafItr2;
   phddvtpair pair;
+  pharrayiterator arrayItr1;
+  pharrayiterator arrayItr2;
+  pharray particles;
 } phddvtpairiterator;
 
 #define phddvtpairiterator(ddvt) ((phddvtpairiterator) { \
   (phiteratornext) phDdvtPairNext, (phiteratorderef) phDdvtPairDeref, \
   ddvt->parent, ddvt, \
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-  NULL, NULL \
+  phlistblankiterator(), \
+  phlistblankiterator(), \
+  NULL, NULL, \
+  pharrayblankiterator(), \
+  pharrayblankiterator(), \
+  pharray(0, NULL) \
 })
 
+#define phddvtpairblankiterator(ddvt) ((phddvtpairiterator) { \
+  (phiteratornext) phDdvtPairNext, (phiteratorderef) phDdvtPairDeref, \
+  NULL, NULL, \
+  phlistblankiterator(), \
+  phlistblankiterator(), \
+  NULL, NULL, \
+  pharrayblankiterator(), \
+  pharrayblankiterator(), \
+  pharray(0, NULL) \
+})
+
+typedef struct phcollisionlist {
+  phlist collisions;
+  phlist inBoxCollisions;
+  phlist outBoxCollisions;
+  phlist nextCollisions;
+} phcollisionlist;
+
+#define phcollisionlist() ((phcollisionlist) { \
+  phlist(), phlist(), phlist(), phlist() \
+})
+
+#if PH_THREAD
+
+typedef void (*phthreadhandle)(void *);
+
+typedef struct phthreadctrl {
+  pthread_cond_t endCond;
+  pthread_mutex_t endMutex;
+  phthreadhandle handle;
+  pharray threads;
+} phthreadctrl;
+
+#define phthreadctrl() ((phthreadctrl) { \
+  PTHREAD_COND_INITIALIZER, \
+  PTHREAD_MUTEX_INITIALIZER, \
+  NULL, \
+  pharray(0, NULL) \
+})
+
+typedef struct phthread {
+  pthread_t thread;
+  phthreadctrl *ctrl;
+  pthread_cond_t step;
+  pthread_mutex_t active;
+  phbool signalCtrl;
+  void *data;
+} phthread;
+
+#define phthread() ((phthread) { \
+  0, NULL, \
+  PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, \
+  1, NULL \
+})
+
+typedef struct phparticleintegratethreaddata {
+  pharrayiterator particleItr;
+  phlist shouldUpdate;
+  void *world;
+} phparticleintegratethreaddata;
+
+#define phparticleintegratethreaddata() ((phparticleintegratethreaddata) { \
+  pharrayblankiterator(), phlist(), NULL \
+})
+
+typedef struct phparticletestthreaddata {
+  phlist ddvts;
+  phcollisionlist collisions;
+} phparticletestthreaddata;
+
+#define phparticletestthreaddata() ((phparticletestthreaddata) { \
+  phlist(), phcollisionlist() \
+})
+
+typedef struct phparticlesolvethreaddata {
+  phlist *collisions;
+  phlist unsolved;
+} phparticlesolvethreaddata;
+
+#define phparticlesolvethreaddata() ((phparticlesolvethreaddata) { \
+  NULL, phlist() \
+})
+
+#endif
+
 typedef struct phworld {
+  phint particlesAlive;
   phlist particles;
+  pharray particleArray;
+  phint particleIndex;
   phlist particleData;
   struct {
     phlist beforeStep, afterStep;
@@ -311,24 +453,55 @@ typedef struct phworld {
   struct {
     phbox box;
     phddvt ddvt;
-    phlist collisions;
-    phlist nextCollisions;
+    phcollisionlist collisions;
+    phlist shouldUpdate;
   } _optimization;
   struct {
     phlist garbage;
     phlist next;
   } _garbage;
-  phint particlesAlive;
+  #if PH_THREAD
+  phthreadctrl threadCtrl;
+  pharray particleIntegrateThreadData;
+  pharray particleTestThreadData;
+  pharray particleSolveThreadData;
+  #endif
 } phworld;
 
-#define phworld(box) ((phworld) { \
+#if PH_THREAD
+#define _phworldend \
   phlist(), phlist(), \
+  phthreadctrl(), \
+  pharray(0, NULL), \
+  pharray(0, NULL), \
+  pharray(0, NULL)
+#else
+#define _phworldend \
+  phlist(), phlist()
+#endif
+
+#define phworld(box) ((phworld) { \
+  0, \
+  phlist(), \
+  pharray(0, NULL), 0, \
+  phlist(), \
   phlist(), phlist(), \
   1, 20, \
   0, 1 / 60.0, 0, 10, \
-  box, phddvt(NULL, box, 64, 128), phlist(), phlist(), \
-  phlist(), phlist(), \
-  0 \
+  box, phddvt(NULL, box, 4, 16), phcollisionlist(), \
+  phlist(), \
+  _phworldend \
+})
+
+typedef struct phworldparticleiterator {
+  phiterator iterator;
+  pharrayiterator arrayitr;
+} phworldparticleiterator;
+
+#define phworldparticleiterator(world) ((phworldparticleiterator) { \
+  (phiteratornext) phWorldParticleNext, \
+  (phiteratorderef) phWorldParticleDeref, \
+  pharrayiterator((&world->particleArray)) \
 })
 
 typedef struct phworldgarbage {
@@ -387,7 +560,7 @@ typedef struct phstick {
 
 #ifdef EMSCRIPTEN
 // Compiling under emscripten complains about implicit sqrt declaration.
-double sqrt(double);
+// double sqrt(double);
 #endif
 
 static phv phZero() {return phv(0, 0);}
@@ -471,6 +644,11 @@ static phbool phIntersect(phbox a, phbox b) {
     a.bottom <= b.top && a.top >= b.bottom;
 }
 
+static phbool phBoxContain(phbox a, phbox b) {
+  return a.left <= b.left && a.right >= b.right &&
+    a.bottom <= b.bottom && a.top >= b.top;
+}
+
 static phbox phBoxTranslate(phbox a, phv t) {
   a.left += t.x;
   a.top += t.y;
@@ -502,14 +680,58 @@ static phbox phBR(phbox box) {
 // phList, List functions
 
 void phDump(phlist *, void (*freeFn)(void *));
-phlist * phAppend(phlist *, void *);
+// phlist * phAppend(phlist *, void *);
+phlist * phPrepend(phlist *, void *);
 phlist * phInsert(phlist *, int index, void *);
 phlist * phRemove(phlist *, void *);
+phlist * phRemoveLast(phlist *, void *);
 
 #define phlistiterator(list, node) ((phlistiterator) { \
   (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
   list->first, NULL, NULL \
 })
+  
+static phlist * phAppend(phlist *self, void *item) {
+  phlistnode *node = self->freeList;
+  if (node) {
+    self->freeList = self->freeList->next;
+  } else {
+    node = phAlloc(phlistnode);
+  }
+
+  *node = phlistnode(NULL, self->last, item);
+
+  if (!self->first) {
+    self->first = node;
+  } else {
+    self->last->next = node;
+  }
+  self->last = node;
+
+  self->length++;
+  return self;
+}
+
+static void * phShift(phlist *self) {
+  phlistnode *node = self->first;
+
+  if (node) {
+    if ((self->first = node->next)) {
+      node->next->prev = NULL;
+    } else {
+      self->last = NULL;
+    }
+
+    node->next = self->freeList;
+    self->freeList = node;
+
+    self->length--;
+
+    return node->item;
+  } else {
+    return NULL;
+  }
+}
 
 static void phClean(phlist *self, void (*freeItem)(void *)) {
   if (!freeItem) {
@@ -538,10 +760,7 @@ static void phClean(phlist *self, void (*freeItem)(void *)) {
 
 static phbool phListNext(_phlistiterator *self) {
   phlistnode *node = self->node;
-  if (node) {
-    self->node = node->next;
-  }
-  return self->node != NULL;
+  return node ? self->node = node->next : NULL;
 }
 
 static void * phListDeref(_phlistiterator *self) {
@@ -569,8 +788,10 @@ static void * phDeref(phiterator *self) {
 }
 
 static void phStaticIterate(
-  phbool (*next)(phiterator *),
-  void * (*deref)(phiterator *),
+  phiteratornext next,
+  phiteratorderef deref,
+  // phbool (*next)(phiterator *),
+  // void * (*deref)(phiterator *),
   phiterator *self,
   phitrfn itr,
   void *ctx
@@ -581,8 +802,10 @@ static void phStaticIterate(
 }
 
 static void phIterate(phiterator *self, phitrfn itr, void *ctx) {
-  while (phNext(self)) {
-    itr(ctx, phDeref(self));
+  phiteratornext next = self->next;
+  phiteratorderef deref = self->deref;
+  while (next(self)) {
+    itr(ctx, deref(self));
   }
 }
 
@@ -596,12 +819,30 @@ phbool phContains(phiterator *, void *);
 void * phGetIndex(phiterator *, phint);
 phbool phSame(void *ctx, void *item);
 
-pharray * phToArray(phiterator *, pharray *);
+static pharray * phToArray(phiterator *self, pharray *ary) {
+  phint i = 0;
+  phint capacity = ary->capacity;
+  void **items = ary->items;
+  phiteratornext next = self->next;
+  phiteratorderef deref = self->deref;
+  for (; i < capacity && next(self); ++i, ++items) {
+    *items = deref(self);
+  }
+  return ary;
+}
+
+static pharray * phUnsafeToArray(phiterator *self, pharray *ary) {
+  void **items = ary->items;
+  phiteratornext next = self->next;
+  phiteratorderef deref = self->deref;
+  for (; next(self); ++items) {
+    *items = deref(self);
+  }
+  return ary;
+}
 
 static phbool phArrayNext(_pharrayiterator *self) {
-  self->items++;
-  self->test = self->items < self->end;
-  return self->test;
+  return self->test = ++self->items < self->end;
 }
 
 static void * phArrayDeref(_pharrayiterator *self) {
@@ -633,6 +874,7 @@ static phbool phStaticContains(
 // phParticle
 
 void phParticleDump(phparticle *);
+void phParticleWorldDataDump(phparticleworlddata *);
 void phParticleCopy(phparticle *, phparticle *);
 
 void phIntegrate(phparticle *, phdouble dt);
@@ -642,6 +884,7 @@ void phSolve(phparticle *, phparticle *, phcollision *);
 // Ignore another particle or it's data.
 void phIgnore(phparticle *, void *);
 void phStopIgnore(phparticle *, void *);
+phbool phIgnoresOther(phparticle *, void *);
 phv phVelocity(phparticle *);
 phv phScaledVelocity(phparticle *, phdouble dt);
 void phSetVelocity(phparticle *, phv);
@@ -684,6 +927,25 @@ phworld * phWorldSafeRemoveParticle(phworld *, phparticle *, phfreefn);
 phworld * phWorldAddConstraint(phworld *, phconstraint *);
 phworld * phWorldRemoveConstraint(phworld *, phconstraint *);
 phworld * phWorldSafeRemoveConstraint(phworld *, phconstraint *, phfreefn);
+
+static phbool phWorldParticleNext(phworldparticleiterator *itr) {
+  return phArrayNext(&itr->arrayitr);
+}
+
+static void * phWorldParticleDeref(phworldparticleiterator *itr) {
+  return phArrayDeref(&itr->arrayitr);
+}
+
+static phiterator * phWorldParticleIterator(
+  phworld *self, phworldparticleiterator *itr
+) {
+  if (!itr) {
+    itr = phAlloc(phworldparticleiterator);
+  }
+  *itr = phworldparticleiterator(self);
+  itr->arrayitr.end = self->particleArray.items + self->particleIndex;
+  return (phiterator *) itr;
+}
 
 // phComposite
 
