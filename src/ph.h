@@ -537,6 +537,9 @@ typedef struct phconstrainttype {
   id, copy, before, update \
 })
 
+#define phconstrainttypefromname(id, name) \
+  phconstrainttype(id, name ## Copy, name ## BeforeStep, name ## Update)
+
 typedef struct phconstraint {
   phconstrainttype *type;
 } phconstraint;
@@ -554,9 +557,20 @@ typedef struct pgpeg {
 typedef struct phstick {
   phconstrainttype *type;
   phparticle *a, *b;
-  phv length;
-  phv factor;
+  phdouble length;
+  phdouble factor;
 } phstick;
+
+extern phconstraintid phflowid;
+extern phconstrainttype *phflowtype;
+
+typedef struct phflow {
+  phconstrainttype *type;
+  phparticle *particle;
+  phv force;
+} phflow;
+
+#define phflow(particle, force) ((phflow) {phflowtype, particle, force})
 
 #ifdef EMSCRIPTEN
 // Compiling under emscripten complains about implicit sqrt declaration.

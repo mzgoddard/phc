@@ -110,7 +110,78 @@ static void set_particle_vertices(struct gldata *data, phparticle *particle) {
   data->index++;
 }
 
-void stepInput() {}
+typedef struct phmouse {
+  phint button;
+  phbool pressed;
+  phv position;
+} phmouse;
+
+struct {
+  phlist particles;
+  phlist constraints;
+} flowline = {
+  phlist(),
+  phlist()
+};
+
+void input(phmouse *state, phmouse *lastState) {
+  if (state->pressed && !lastState->pressed) {
+    phlistiterator litr;
+    // Remove current particles.
+    phIterate(
+      phIterator(&flowline.particles, &litr),
+      (phitrfn) phWorldSafeRemoveParticle,
+      world
+    );
+    phIterate(
+      phIterator(&flowline.constraints, &litr),
+      (phitrfn) phWorldSafeRemoveConstraint,
+      world
+    );
+    // Free current particles.
+    phClean(&flowline.particles, free);
+    phClean(&flowline.constraints, free);
+    // Add first particle.
+    phparticle *particle = phCreate(phparticle, state->position);
+    phflow *flow = phCreate(
+      phflow,
+      particle,
+      phScale(phUnit(phSub(state->position, lastState->position)), 10)
+    );
+    phAppend(&flowline.particles, particle);
+    phAppend(&flowline.constraints, flow);
+  } else if (state->pressed) {
+    // If far enough, add new particle.
+    phparticle *lastParticle = flowline.particles.last->item;
+    if (phMag(phSub(state->position, lastParticle->position)) > 10) {
+      phflow *lastFlow = flowline.constraints.last->item;
+      lastFlow->force =
+        phScale(phUnit(phSub(state->position, lastParticle->position)), 10);
+
+      phparticle *particle = phCreate(phparticle, state->position);
+      phflow *flow = phCreate(
+        phflow,
+        particle,
+        phScale(phUnit(phSub(state->position, lastState->position)), 10)
+      );
+      phAppend(&flowline.particles, particle);
+      phAppend(&flowline.constraints, flow);
+    }
+  } else if (lastState->pressed) {
+    // Add particles to world.
+    phlistiterator litr;
+    phIterate(
+      phIterator(&flowline.particles, &litr),
+      (phitrfn) phWorldAddParticle,
+      world
+    );
+    phIterate(
+      phIterator(&flowline.constraints, &litr),
+      (phitrfn) phWorldAddConstraint,
+      world
+    );
+  }
+}
 
 void draw() {
   glClearColor(0,0,0,0);
@@ -283,16 +354,19 @@ void main_loop() {
   lastTicks = newTicks;
 }
 
-static void process_events( void )
-{
+phmouse mousestate;
+
+static void process_events(void) {
   /* Our SDL event placeholder. */
   SDL_Event event;
 
   int hadEvent = 0;
 
+  phmouse newmousestate;
+
   /* Grab all the events off the queue. */
-  while( SDL_PollEvent( &event ) ) {
-    switch( event.type ) {
+  while(SDL_PollEvent(&event)) {
+    switch(event.type) {
       case SDL_KEYDOWN:
       if (event.key.keysym.sym == SDLK_ESCAPE) {
         SDL_Quit();
@@ -300,16 +374,33 @@ static void process_events( void )
       }
       break;
 
+      case SDL_MOUSEBUTTONDOWN:
+      newmousestate.button = event.button.button;
+      newmousestate.pressed = 1;
+      newmousestate.position = phv(event.button.x, event.button.y);
+      break;
+
+      case SDL_MOUSEBUTTONUP:
+      newmousestate.button = event.button.button;
+      newmousestate.pressed = 0;
+      newmousestate.position = phv(event.button.x, event.button.y);
+      break;
+
+      case SDL_MOUSEMOTION:
+      newmousestate.position = phv(event.motion.x, event.motion.y);
+      break;
+
       case SDL_QUIT:
       /* Handle quit requests (like Ctrl-c). */
       SDL_Quit();
-      exit( 0 );
+      exit(0);
       break;
 
       default:
       break;
     }
 
-    stepInput();
+    input(&newmousestate, &mousestate);
+    mousestate = newmousestate;
   }
 }
