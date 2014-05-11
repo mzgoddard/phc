@@ -228,6 +228,13 @@ static void _phThreadCtrlInit(phthreadctrl *self, phworld *w) {
   pthread_mutex_lock(&self->endMutex);
 
   phint cpus = sysconf(_SC_NPROCESSORS_ONLN);
+  if (cpus > 5) {
+    // FIXME
+    // More than 5 threads (possibly only on machines that can run that many)
+    // results in a ddvt of length 1 more is actually stored in it. That extra
+    // length then causes a segfault (EXC_BAD_ACCESS).
+    cpus = 5;
+  }
 
   _phThreadInitGroup(self, cpus);
 }
