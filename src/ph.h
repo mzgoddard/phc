@@ -715,6 +715,12 @@ static phbox phBR(phbox box) {
   return phbox(CENTERX, CENTERY, box.right, box.bottom);
 }
 
+// Function functions
+
+static void phCall(void *fn, void *obj) {
+  ((void (*)(void*))fn)(obj);
+}
+
 // phList, List functions
 
 void phDump(phlist *, void (*freeFn)(void *));
