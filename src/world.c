@@ -241,13 +241,13 @@ static void _phThreadCtrlInit(phthreadctrl *self, phworld *w) {
   pthread_mutex_lock(&self->endMutex);
 
   phint cpus = sysconf(_SC_NPROCESSORS_ONLN);
-  if (cpus > 5) {
-    // FIXME
-    // More than 5 threads (possibly only on machines that can run that many)
-    // results in a ddvt of length 1 more is actually stored in it. That extra
-    // length then causes a segfault (EXC_BAD_ACCESS).
-    cpus = 5;
-  }
+  // if (cpus > 5) {
+  //   // FIXME
+  //   // More than 5 threads (possibly only on machines that can run that many)
+  //   // results in a ddvt of length 1 more is actually stored in it. That extra
+  //   // length then causes a segfault (EXC_BAD_ACCESS).
+  //   cpus = 5;
+  // }
 
   _phThreadInitGroup(self, cpus);
 }
@@ -433,6 +433,19 @@ void phWorldInternalStep(phworld *self) {
   {
     phint i = 0;
     phint numThreads = self->threadCtrl.threads.capacity;
+    // FIXME
+    // This is a workaround for a bug that possibly leaves in out of date ddvts
+    // that are no longer leaves let alone out of date. I'm not really sure how
+    // this happens they should start empty and be cleaned by their thread when
+    // they are done working.
+    //
+    // Technically the thing to fix is lists or the test threads. Comment out
+    // this for block to bring the bug back.
+    for (; numThreads - i; ++i) {
+      phparticletestthreaddata *data = self->particleTestThreadData.items[i];
+      phClean(&data->ddvts, NULL);
+    }
+    i = 0;
     phddvtpairiterator _ditr;
     phDdvtPairIterator(&self->_optimization.ddvt, &_ditr);
     while (phDdvtPairNext(&_ditr)) {
