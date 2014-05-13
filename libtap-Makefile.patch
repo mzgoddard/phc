@@ -15,4 +15,20 @@ index 750ae44..eb9c528 100644
 +	CFLAGS += -ansi -D_BSD_SOURCE -DMAP_ANONYMOUS
  	LDLIBS += -lbsd-compat
  endif
- 
+--- a/tap.h
++++ b/tap.h
+@@ -66,6 +66,14 @@
+#define lives_ok(...)    dies_ok_common(0, __VA_ARGS__)
+
+#ifdef _WIN32
++#define WINDOWS_LIKE
++#endif
++
++#ifdef EMSCRIPTEN
++#define WINDOWS_LIKE
++#endif
++
++#ifdef WINDOWS_LIKE
+#define like(...)        tap_skip(1, "like is not implemented on Windows")
+#define unlike           tap_skip(1, "unlike is not implemented on Windows")
+#define dies_ok_common(...) \
