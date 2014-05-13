@@ -938,6 +938,8 @@ phparticle * phWorldRayCast(phworld *, phray);
 phiterator * phWorldRayIterator(phworld *, phray, phrayiterator *);
 phiterator * phWorldBoxIterator(phworld *, phbox, phboxiterator *);
 
+phworld * phAfterStep(phworld *, phitrfn, phfreefn, void *);
+
 phworld * phWorldAddParticle(phworld *, phparticle *);
 phworld * phWorldRemoveParticle(phworld *, phparticle *);
 phworld * phWorldSafeRemoveParticle(phworld *, phparticle *, phfreefn);

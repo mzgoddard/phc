@@ -559,9 +559,7 @@ phworldgarbage * _phWorldNextGarbage(phworld *self) {
   return garbage;
 }
 
-phworld * _phWorldSafeRemove(
-  phworld *self, void *item, phitrfn fn, phfreefn freefn
-) {
+phworld * phAfterStep(phworld *self, phitrfn fn, phfreefn freefn, void *item) {
   if (self->timing.insideStep) {
     phworldgarbage *garbage = _phWorldNextGarbage(self);
     *garbage = phworldgarbage(item, fn, freefn);
@@ -577,8 +575,8 @@ phworld * _phWorldSafeRemove(
 phworld * phWorldSafeRemoveParticle(
   phworld *self, phparticle *particle, phfreefn freefn
 ) {
-  return _phWorldSafeRemove(
-    self, particle, (phitrfn) phWorldRemoveParticle, freefn
+  return phAfterStep(
+    self, (phitrfn) phWorldRemoveParticle, freefn, particle
   );
 }
 
@@ -603,7 +601,7 @@ phworld * phWorldRemoveConstraint(phworld *self, phconstraint *constraint) {
 phworld * phWorldSafeRemoveConstraint(
   phworld *self, phconstraint *constraint, phfreefn freefn
 ) {
-  return _phWorldSafeRemove(
-    self, constraint, (phitrfn) phWorldRemoveConstraint, freefn
+  return phAfterStep(
+    self, (phitrfn) phWorldRemoveConstraint, freefn, constraint
   );
 }
