@@ -96,13 +96,13 @@ static void _phDdvtTestParticles(phddvt *self, phcollisionlist *collisions) {
   phlist *outBoxCollisions = &collisions->outBoxCollisions;
   #endif
   phint length = self->length;
-  for (phint i = 0; length - i; ++i) {
+  for (phint i = 0; i < length; ++i) {
     phparticle *a = items[i];
     phbox boxA = a->_worldData.oldBox;
     #if PH_THREAD
     phbool inLeafDdvt = a->_worldData.inLeafDdvt;
     #endif
-    for (phint j = i + 1; length - j; ++j) {
+    for (phint j = i + 1; j < length; ++j) {
       phparticle *b = items[j];
       phbox boxB = b->_worldData.oldBox;
 
