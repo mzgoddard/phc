@@ -82,6 +82,10 @@ typedef struct phv {
 
 #define phv(x, y) ((phv) {x, y})
 
+#define phvunpack(v) v.x, v.y
+
+#define phvunpackfmt(v, type) (type) v.x, (type) v.y
+
 typedef struct phm {
   phdouble aa, ab, ba, bb;
 } phm;
