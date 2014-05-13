@@ -67,7 +67,11 @@ void setWaterTestGravity(float _gravity[3]) {
 }
 
 static void gravityIterator(void *ctx, phparticle *particle) {
-  particle->acceleration = phAdd(particle->acceleration, gravity);
+  if (particle->position.y > 320) {
+    particle->acceleration = phAdd(particle->acceleration, gravity);
+  } else {
+    particle->acceleration = phAdd(particle->acceleration, phScale(gravity, -1));
+  }
 }
 
 static void containIterator(phworld *world, phparticle *particle) {
