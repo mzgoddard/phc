@@ -31,7 +31,7 @@ void _phDdvtAddLeaf(phddvt *self, phparticle *particle) {
 void _phDdvtRemoveLeaf(phddvt *self, phparticle *particle) {
   // phRemove(&self->particles, particle);
   // for (phint i = self->length - 1; i >= 0; --i) {
-  for (phint i = 0, length = self->length; length - i; ++i) {
+  for (phint i = 0, length = self->length; i < length; ++i) {
     if (self->_particleArray.items[i] == particle) {
       self->_particleArray.items[i] = self->_particleArray.items[length - 1];
       break;
