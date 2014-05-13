@@ -36,6 +36,8 @@
 
 #include "../simple/env.h"
 
+phv screen_size = phv(640, 640);
+
 void main_loop();
 static void process_events();
 
@@ -115,6 +117,10 @@ typedef struct phmouse {
   phbool pressed;
   phv position;
 } phmouse;
+
+#define phmouse() ((phmouse) { \
+  0, 0, 0, 0 \
+})
 
 struct {
   phlist particles;
@@ -257,9 +263,10 @@ int main(int argc, char *argv[])
   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 ); // *new*
 
   #if EMSCRIPTEN
-  screen = SDL_SetVideoMode( 640, 640, 16, SDL_OPENGL | SDL_RESIZABLE ); // *changed*
+  screen = SDL_SetVideoMode( phvunpack(screen_size), 16, SDL_OPENGL |
+    SDL_RESIZABLE );
   #else
-  screen = SDL_SetVideoMode( 640, 640, 16, SDL_OPENGL ); // *changed*  
+  screen = SDL_SetVideoMode( phvunpack(screen_size), 16, SDL_OPENGL );
   #endif
   if ( !screen ) {
     printf("Unable to set video mode: %s\n", SDL_GetError());
@@ -284,8 +291,10 @@ int main(int argc, char *argv[])
   printf( "VIEWPORT dimensions %d %d %d %d.\n", VIEWPORT_DIMENSIONS );
   VIEWPORT();
 #else
-  printf( "VIEWPORT dimensions %d %d %d %d.\n", 0, 0, 640, 640 );
-  glViewport( 0, 0, 640, 640 );
+  printf( "VIEWPORT dimensions %d %d %d %d.\n",
+    0, 0, phvunpackfmt(screen_size, int)
+  );
+  glViewport( 0, 0, phvunpack(screen_size) );
 #endif
 #if EMSCRIPTEN
   emscripten_set_main_loop(main_loop, 0, 0);
@@ -354,7 +363,7 @@ void main_loop() {
   lastTicks = newTicks;
 }
 
-phmouse mousestate;
+phmouse mousestate = phmouse();
 
 static void process_events(void) {
   /* Our SDL event placeholder. */
@@ -362,7 +371,7 @@ static void process_events(void) {
 
   int hadEvent = 0;
 
-  phmouse newmousestate;
+  phmouse newmousestate = mousestate;
 
   /* Grab all the events off the queue. */
   while(SDL_PollEvent(&event)) {
@@ -377,17 +386,26 @@ static void process_events(void) {
       case SDL_MOUSEBUTTONDOWN:
       newmousestate.button = event.button.button;
       newmousestate.pressed = 1;
-      newmousestate.position = phv(event.button.x, event.button.y);
+      newmousestate.position =
+        phv(event.button.x, screen_size.y - event.button.y);
+      input(&newmousestate, &mousestate);
+      mousestate = newmousestate;
       break;
 
       case SDL_MOUSEBUTTONUP:
       newmousestate.button = event.button.button;
       newmousestate.pressed = 0;
-      newmousestate.position = phv(event.button.x, event.button.y);
+      newmousestate.position =
+        phv(event.button.x, screen_size.y - event.button.y);
+      input(&newmousestate, &mousestate);
+      mousestate = newmousestate;
       break;
 
       case SDL_MOUSEMOTION:
-      newmousestate.position = phv(event.motion.x, event.motion.y);
+      newmousestate.position =
+        phv(event.motion.x, screen_size.y - event.motion.y);
+      input(&newmousestate, &mousestate);
+      mousestate = newmousestate;
       break;
 
       case SDL_QUIT:
@@ -399,8 +417,8 @@ static void process_events(void) {
       default:
       break;
     }
-
-    input(&newmousestate, &mousestate);
-    mousestate = newmousestate;
   }
+
+  input(&newmousestate, &mousestate);
+  mousestate = newmousestate;
 }
