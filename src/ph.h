@@ -674,14 +674,14 @@ static phbox phBoxConstrainSmaller(phbox a, phbox b) {
     a.right += b.left - a.left;
     a.left = b.left;
   } else if (a.right > b.right) {
-    a.left -= b.right - a.right;
+    a.left += b.right - a.right;
     a.right = b.right;
   }
   if (a.bottom < b.bottom) {
     a.top += b.bottom - a.bottom;
     a.bottom = b.bottom;
   } else if (a.top > b.top) {
-    a.bottom -= b.top - a.top;
+    a.bottom += b.top - a.top;
     a.top = b.top;
   }
   return a;
