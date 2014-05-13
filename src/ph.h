@@ -908,7 +908,7 @@ void phSetScaledVelocity(phparticle *, phv, phdouble dt);
 
 phconstraint * phConstraintCopy(void *, phlist *dst, phlist *src);
 phbool phConstraintBeforeStep(void *);
-void phConstraintUpdate(void *, phworld *);
+void phConstraintUpdate(phworld *, void *);
 
 // phDdvt
 

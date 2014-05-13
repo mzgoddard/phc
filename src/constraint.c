@@ -8,6 +8,6 @@ phbool phConstraintBeforeStep(void *self) {
   return ((phconstraint*) self)->type->beforeStep(self);
 }
 
-void phConstraintUpdate(void *self, phworld *world) {
+void phConstraintUpdate(phworld *world, void *self) {
   ((phconstraint*) self)->type->update(self, world);
 }
