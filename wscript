@@ -74,7 +74,7 @@ def configure(ctx):
 
     ctx.start_msg( 'build libtap dependency' )
     if CC == 'emcc':
-        libtapStatus = ctx.exec_command( 'cd vendor/libtap && CC=emcc AR=emar make clean libtap.a' )
+        libtapStatus = ctx.exec_command( 'cd vendor/libtap && CC=emcc AR=emar ANSI=1 make clean libtap.a' )
     else:
         libtapStatus = ctx.exec_command( 'cd vendor/libtap && make clean all' )
     if libtapStatus == 0:
