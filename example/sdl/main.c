@@ -136,44 +136,52 @@ void input(phmouse *state, phmouse *lastState) {
     // Remove current particles.
     phIterate(
       phIterator(&flowline.particles, &litr),
-      (phitrfn) phWorldSafeRemoveParticle,
+      (phitrfn) phWorldRemoveParticle,
       world
     );
     phIterate(
       phIterator(&flowline.constraints, &litr),
-      (phitrfn) phWorldSafeRemoveConstraint,
+      (phitrfn) phWorldRemoveConstraint,
       world
     );
     // Free current particles.
+    phIterate(
+      phIterator(&flowline.particles, &litr),
+      (phitrfn) phCall,
+      (phitrfn) phParticleDump
+    );
     phClean(&flowline.particles, free);
     phClean(&flowline.constraints, free);
     // Add first particle.
     phparticle *particle = phCreate(phparticle, state->position);
+    particle->radius = 50;
     phflow *flow = phCreate(
       phflow,
       particle,
-      phScale(phUnit(phSub(state->position, lastState->position)), 10)
+      phScale(phUnit(phv(1, 1)), 1000)
     );
     phAppend(&flowline.particles, particle);
     phAppend(&flowline.constraints, flow);
-  } else if (state->pressed) {
+    printf("press\n");
+  } else if (state->pressed && lastState->pressed) {
     // If far enough, add new particle.
     phparticle *lastParticle = flowline.particles.last->item;
     if (phMag(phSub(state->position, lastParticle->position)) > 10) {
       phflow *lastFlow = flowline.constraints.last->item;
       lastFlow->force =
-        phScale(phUnit(phSub(state->position, lastParticle->position)), 10);
+        phScale(phUnit(phSub(state->position, lastParticle->position)), 1000);
 
       phparticle *particle = phCreate(phparticle, state->position);
+      particle->radius = 50;
       phflow *flow = phCreate(
         phflow,
         particle,
-        phScale(phUnit(phSub(state->position, lastState->position)), 10)
+        phScale(phUnit(phSub(state->position, lastState->position)), 1000)
       );
       phAppend(&flowline.particles, particle);
       phAppend(&flowline.constraints, flow);
     }
-  } else if (lastState->pressed) {
+  } else if (lastState->pressed && !state->pressed) {
     // Add particles to world.
     phlistiterator litr;
     phIterate(
@@ -186,6 +194,7 @@ void input(phmouse *state, phmouse *lastState) {
       (phitrfn) phWorldAddConstraint,
       world
     );
+    printf("release\n");
   }
 }
 
