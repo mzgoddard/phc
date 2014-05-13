@@ -267,9 +267,7 @@ static void _phParticleIntegrateDataInit(pharray *self, phint num, phworld *w) {
 static void _phParticleTestDataInit(pharray *self, phint num) {
   *self = pharray(num, calloc(num, sizeof(phparticletestthreaddata *)));
   for (phint i = 0, l = self->capacity; i < l; ++i) {
-    phparticletestthreaddata *data = self->items[i] =
-      phAlloc(phparticletestthreaddata);
-    *data = phparticletestthreaddata();
+    self->items[i] = phCreate(phparticletestthreaddata);
   }
 }
 
