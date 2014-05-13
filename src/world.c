@@ -155,7 +155,9 @@ static void _phDdvtUpdateList(phddvt *ddvt, phlist *shouldUpdate) {
   while (phListNext(&_litr)) {
     phparticle *particle = _litr.node->item;
     phv position = particle->position;
-    phbox newBox = phAabb(position, particle->radius);
+    phbox newBox = phBoxConstrainSmaller(
+      phAabb(position, particle->radius), ddvt->box
+    );
     phDdvtUpdate(ddvt, particle, particle->_worldData.oldBox, newBox);
     particle->_worldData.oldPosition = position;
     particle->_worldData.oldBox = newBox;
@@ -414,7 +416,7 @@ void phWorldInternalStep(phworld *self) {
     if (
       phMag2(phSub(position, oldPosition)) > radius * radius / 10
     ) {
-      newBox = phAabb(position, radius);
+      newBox = phBoxConstrainSmaller(phAabb(position, radius), ddvt->box);
       phDdvtUpdate(ddvt, particle, particle->_worldData.oldBox, newBox);
       particle->_worldData.oldPosition = position;
       particle->_worldData.oldBox = newBox;
@@ -521,7 +523,12 @@ void phWorldStep(phworld *self, phdouble dt) {
 phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
   // particle->_worldData = phAlloc(phparticleworlddata);
   particle->_worldData =
-    phparticleworlddata(phAabb(particle->position, particle->radius));
+    phparticleworlddata(
+      phBoxConstrainSmaller(
+        phAabb(particle->position, particle->radius),
+        self->_optimization.ddvt.box
+      )
+    );
   particle->_worldData.oldPosition = particle->position;
   phAppend(&self->particles, particle);
   if (self->particleArray.capacity == self->particleIndex) {
