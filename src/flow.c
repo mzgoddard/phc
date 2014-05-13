@@ -14,6 +14,7 @@ phbool phFlowBeforeStep(void *_flow) {
   phflow *flow = _flow;
   flow->particle->data = flow;
   flow->particle->isTrigger = 1;
+  flow->particle->isStatic = 1;
   flow->particle->collide = phFlowCollide;
 
   return 0;
@@ -23,5 +24,5 @@ void phFlowUpdate(void *_flow, phworld *world) {}
 
 phconstraintid phflowid = "phflow";
 phconstrainttype *phflowtype = &(phconstrainttype(
-  phflowid, phFlowCopy, phFlowBeforeStep, phFlowUpdate
+  &phflowid, phFlowCopy, phFlowBeforeStep, phFlowUpdate
 ));
