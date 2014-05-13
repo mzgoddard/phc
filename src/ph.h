@@ -205,6 +205,7 @@ typedef struct pharrayiterator {
 
 typedef struct phcollision {
   void *a, *b;
+  phbool isTrigger;
   phdouble ingress;
   phdouble distance;
   phdouble lambx, lamby;
@@ -362,10 +363,11 @@ typedef struct phcollisionlist {
   phlist inBoxCollisions;
   phlist outBoxCollisions;
   phlist nextCollisions;
+  phlist triggerCollisions;
 } phcollisionlist;
 
 #define phcollisionlist() ((phcollisionlist) { \
-  phlist(), phlist(), phlist(), phlist() \
+  phlist(), phlist(), phlist(), phlist(), phlist() \
 })
 
 #if PH_THREAD
@@ -895,6 +897,7 @@ void phIntegrate(phparticle *, phdouble dt);
 phbool phTest(phparticle *, phparticle *, phcollision *);
 void phTestReset(phparticle *);
 void phSolve(phparticle *, phparticle *, phcollision *);
+void phSolveTrigger(phparticle *, phparticle *, phcollision *);
 // Ignore another particle or it's data.
 void phIgnore(phparticle *, void *);
 void phStopIgnore(phparticle *, void *);

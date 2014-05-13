@@ -34,6 +34,9 @@ static void _phSaveCollision(phcollisionlist *self) {
     self->collisions.freeList->next = NULL;
   }
   phAppend(&self->collisions, col);
+  if (col->isTrigger) {
+    phAppend(&self->triggerCollisions, col);
+  }
 }
 
 static void _phResetCollisions(phcollisionlist *self) {
@@ -61,6 +64,7 @@ static void _phResetCollisions(phcollisionlist *self) {
   }
   phClean(&self->inBoxCollisions, NULL);
   phClean(&self->outBoxCollisions, NULL);
+  phClean(&self->triggerCollisions, NULL);
 }
 
 static void _phSolveCollisions(phcollisionlist *self) {
@@ -69,7 +73,16 @@ static void _phSolveCollisions(phcollisionlist *self) {
   while (phListNext((phlistiterator *) itr)) {
     // phcollision *col = phListDeref((phlistiterator *) itr);
     phcollision *col = _litr.node->item;
-    phSolve(col->a, col->b, col);
+    if (!col->isTrigger) {
+      phSolve(col->a, col->b, col);
+    }
+  }
+  phIterator(&self->triggerCollisions, &_litr);
+  while (phListNext(&_litr)) {
+    phcollision *col = _litr.node->item;
+    if (col->isTrigger) {
+      phSolveTrigger(col->a, col->b, col);
+    }
   }
 
   _phResetCollisions(self);

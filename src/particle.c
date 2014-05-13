@@ -122,6 +122,13 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
       return 0;
     }
 
+    if (self->isTrigger || other->isTrigger) {
+      col->isTrigger = 1;
+      return 1;
+    } else {
+      col->isTrigger = 0;
+    }
+
     ingress = sqrt(ingress);
 
     if ( ingress == 0.0 ) {
@@ -140,6 +147,10 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
 }
 
 void phSolve(phparticle *self, phparticle *other, phcollision *col) {
+  if (col->isTrigger) {
+    return;
+  }
+
   if (_phHasCollidedAlready(self, other)) {
     return;
   }
@@ -181,16 +192,30 @@ void phSolve(phparticle *self, phparticle *other, phcollision *col) {
     bm = 0;
   }
 
-  if (!self->isTrigger && !other->isTrigger) {
-    selflast->x = selfpos->x + avx;
-    selflast->y = selfpos->y + avy;
-    selfpos->x += lambx * am;
-    selfpos->y += lamby * am;
+  selflast->x = selfpos->x + avx;
+  selflast->y = selfpos->y + avy;
+  selfpos->x += lambx * am;
+  selfpos->y += lamby * am;
 
-    otherlast->x = otherpos->x + bvx;
-    otherlast->y = otherpos->y + bvy;
-    otherpos->x -= lambx * bm;
-    otherpos->y -= lamby * bm;
+  otherlast->x = otherpos->x + bvx;
+  otherlast->y = otherpos->y + bvy;
+  otherpos->x -= lambx * bm;
+  otherpos->y -= lamby * bm;
+}
+
+void phSolveTrigger(phparticle *self, phparticle *other, phcollision *col) {
+  if (_phHasCollidedAlready(self, other)) {
+    return;
+  }
+
+  _phAckCollision(self, other);
+  _phAckCollision(other, self);
+
+  if (self->collide) {
+    self->collide(self, other, col);
+  }
+  if (other->collide) {
+    other->collide(other, self, col);
   }
 }
 
