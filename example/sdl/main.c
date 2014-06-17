@@ -87,10 +87,75 @@ struct glparticle {
   struct glvertex vertices[6];
 };
 
+static const int gldata_size = 65536;
+
 struct gldata {
   int index;
-  struct glparticle particles[kParticleCount+1024];
+  struct glparticle particles[gldata_size];
 };
+
+static void set_mesh_square(
+  struct glparticle *glp, phbox box, struct glcolor color
+) {
+  *glp = (struct glparticle) {{
+    {box.left, box.top, color},
+    {box.right, box.top, color},
+    {box.right, box.bottom, color},
+    {box.left, box.top, color},
+    {box.left, box.bottom, color},
+    {box.right, box.bottom, color}
+  }};
+}
+
+static const phdouble mesh_cell_size = 5;
+static const phdouble mesh_cells_wide = 640 / mesh_cell_size;
+
+static void reset_water_mesh(struct gldata *data) {
+  for (int i = 0, l = gldata_size; i < l; ++i) {
+    set_mesh_square(&data->particles[i], phbox(0, 0, 0, 0), (struct glcolor) {0, 0, 0, 0});
+  }
+  data->index = mesh_cells_wide * (640 / mesh_cell_size);
+  if (gldata_size > data->index) {
+    data->index = gldata_size;
+  }
+}
+
+static void init_water_mesh(struct gldata *data) {
+  reset_water_mesh(data);
+}
+
+static void toggle_water_mesh_cells(struct gldata *data, phparticle *particle) {
+  phbox box = phAabb(particle->position, particle->radius);
+  // Align box with mesh_cell_size
+  box.left = floor(box.left / mesh_cell_size) * mesh_cell_size;
+  box.top = ceil(box.top / mesh_cell_size) * mesh_cell_size;
+  box.right = ceil(box.right / mesh_cell_size) * mesh_cell_size;
+  box.bottom = floor(box.bottom / mesh_cell_size) * mesh_cell_size;
+  for (
+    phdouble l = box.left, r = box.right;
+    l < r && l < 640 && l >= 0;
+    l += mesh_cell_size
+  ) {
+    for (
+      phdouble b = box.bottom, t = box.top;
+      b < t &&
+        b < floor((gldata_size) / floor(mesh_cells_wide) * mesh_cell_size) &&
+        b >= 0;
+      b += mesh_cell_size
+    ) {
+      int index = 
+        b / mesh_cell_size * floor(mesh_cells_wide) + l / mesh_cell_size;
+      if (data->particles[index].vertices[0].color.a != 255) {
+        phbox square = phbox(l, b + mesh_cell_size, l + mesh_cell_size, b);
+        set_mesh_square(
+          &data->particles[index],
+          square,
+          (struct glcolor) {0, 0, 255, particle->isStatic ? 128: 255}
+        );
+      }
+    }
+  }
+}
 
 static void set_particle_vertices(struct gldata *data, phparticle *particle) {
   struct glcolor color = { 255, 255, 255, 128 };
@@ -101,14 +166,7 @@ static void set_particle_vertices(struct gldata *data, phparticle *particle) {
 
   phbox particlebox = phAabb(particle->position, particle->radius);
   struct glparticle *glp = &data->particles[data->index];
-  *glp = (struct glparticle) {{
-    {particlebox.left, particlebox.top, color},
-    {particlebox.right, particlebox.top, color},
-    {particlebox.right, particlebox.bottom, color},
-    {particlebox.left, particlebox.top, color},
-    {particlebox.left, particlebox.bottom, color},
-    {particlebox.right, particlebox.bottom, color}
-  }};
+  set_mesh_square(glp, particlebox, color);
   data->index++;
 }
 
@@ -241,10 +299,12 @@ void draw() {
 
   struct gldata data;
   data.index = 0;
+  reset_water_mesh(&data);
   phworldparticleiterator _wpitr;
   phWorldParticleIterator(world, &_wpitr);
   while (phWorldParticleNext(&_wpitr)) {
-    set_particle_vertices(&data, phWorldParticleDeref(&_wpitr));
+    // set_particle_vertices(&data, phWorldParticleDeref(&_wpitr));
+    toggle_water_mesh_cells(&data, phWorldParticleDeref(&_wpitr));
   }
 
   glBindBuffer(GL_ARRAY_BUFFER, buffer);
