@@ -82,6 +82,10 @@ typedef struct phv {
 
 #define phv(x, y) ((phv) {x, y})
 
+#define phvunpack(v) v.x, v.y
+
+#define phvunpackfmt(v, type) (type) v.x, (type) v.y
+
 typedef struct phm {
   phdouble aa, ab, ba, bb;
 } phm;
@@ -205,6 +209,7 @@ typedef struct pharrayiterator {
 
 typedef struct phcollision {
   void *a, *b;
+  phbool isTrigger;
   phdouble ingress;
   phdouble distance;
   phdouble lambx, lamby;
@@ -362,10 +367,11 @@ typedef struct phcollisionlist {
   phlist inBoxCollisions;
   phlist outBoxCollisions;
   phlist nextCollisions;
+  phlist triggerCollisions;
 } phcollisionlist;
 
 #define phcollisionlist() ((phcollisionlist) { \
-  phlist(), phlist(), phlist(), phlist() \
+  phlist(), phlist(), phlist(), phlist(), phlist() \
 })
 
 #if PH_THREAD
@@ -537,6 +543,9 @@ typedef struct phconstrainttype {
   id, copy, before, update \
 })
 
+#define phconstrainttypefromname(id, name) \
+  phconstrainttype(id, name ## Copy, name ## BeforeStep, name ## Update)
+
 typedef struct phconstraint {
   phconstrainttype *type;
 } phconstraint;
@@ -554,9 +563,20 @@ typedef struct pgpeg {
 typedef struct phstick {
   phconstrainttype *type;
   phparticle *a, *b;
-  phv length;
-  phv factor;
+  phdouble length;
+  phdouble factor;
 } phstick;
+
+extern phconstraintid phflowid;
+extern phconstrainttype *phflowtype;
+
+typedef struct phflow {
+  phconstrainttype *type;
+  phparticle *particle;
+  phv force;
+} phflow;
+
+#define phflow(particle, force) ((phflow) {phflowtype, particle, force})
 
 #ifdef EMSCRIPTEN
 // Compiling under emscripten complains about implicit sqrt declaration.
@@ -649,6 +669,24 @@ static phbool phBoxContain(phbox a, phbox b) {
     a.bottom <= b.bottom && a.top >= b.top;
 }
 
+static phbox phBoxConstrainSmaller(phbox a, phbox b) {
+  if (a.left < b.left) {
+    a.right += b.left - a.left;
+    a.left = b.left;
+  } else if (a.right > b.right) {
+    a.left += b.right - a.right;
+    a.right = b.right;
+  }
+  if (a.bottom < b.bottom) {
+    a.top += b.bottom - a.bottom;
+    a.bottom = b.bottom;
+  } else if (a.top > b.top) {
+    a.bottom += b.top - a.top;
+    a.top = b.top;
+  }
+  return a;
+}
+
 static phbox phBoxTranslate(phbox a, phv t) {
   a.left += t.x;
   a.top += t.y;
@@ -675,6 +713,12 @@ static phbox phBL(phbox box) {
 
 static phbox phBR(phbox box) {
   return phbox(CENTERX, CENTERY, box.right, box.bottom);
+}
+
+// Function functions
+
+static void phCall(void *fn, void *obj) {
+  ((void (*)(void*))fn)(obj);
 }
 
 // phList, List functions
@@ -881,6 +925,7 @@ void phIntegrate(phparticle *, phdouble dt);
 phbool phTest(phparticle *, phparticle *, phcollision *);
 void phTestReset(phparticle *);
 void phSolve(phparticle *, phparticle *, phcollision *);
+void phSolveTrigger(phparticle *, phparticle *, phcollision *);
 // Ignore another particle or it's data.
 void phIgnore(phparticle *, void *);
 void phStopIgnore(phparticle *, void *);
@@ -894,7 +939,7 @@ void phSetScaledVelocity(phparticle *, phv, phdouble dt);
 
 phconstraint * phConstraintCopy(void *, phlist *dst, phlist *src);
 phbool phConstraintBeforeStep(void *);
-void phConstraintUpdate(void *, phworld *);
+void phConstraintUpdate(phworld *, void *);
 
 // phDdvt
 
@@ -920,6 +965,8 @@ void phWorldInternalStep(phworld *);
 phparticle * phWorldRayCast(phworld *, phray);
 phiterator * phWorldRayIterator(phworld *, phray, phrayiterator *);
 phiterator * phWorldBoxIterator(phworld *, phbox, phboxiterator *);
+
+phworld * phAfterStep(phworld *, phitrfn, phfreefn, void *);
 
 phworld * phWorldAddParticle(phworld *, phparticle *);
 phworld * phWorldRemoveParticle(phworld *, phparticle *);

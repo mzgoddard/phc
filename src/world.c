@@ -34,6 +34,9 @@ static void _phSaveCollision(phcollisionlist *self) {
     self->collisions.freeList->next = NULL;
   }
   phAppend(&self->collisions, col);
+  if (col->isTrigger) {
+    phAppend(&self->triggerCollisions, col);
+  }
 }
 
 static void _phResetCollisions(phcollisionlist *self) {
@@ -61,6 +64,7 @@ static void _phResetCollisions(phcollisionlist *self) {
   }
   phClean(&self->inBoxCollisions, NULL);
   phClean(&self->outBoxCollisions, NULL);
+  phClean(&self->triggerCollisions, NULL);
 }
 
 static void _phSolveCollisions(phcollisionlist *self) {
@@ -69,7 +73,16 @@ static void _phSolveCollisions(phcollisionlist *self) {
   while (phListNext((phlistiterator *) itr)) {
     // phcollision *col = phListDeref((phlistiterator *) itr);
     phcollision *col = _litr.node->item;
-    phSolve(col->a, col->b, col);
+    if (!col->isTrigger) {
+      phSolve(col->a, col->b, col);
+    }
+  }
+  phIterator(&self->triggerCollisions, &_litr);
+  while (phListNext(&_litr)) {
+    phcollision *col = _litr.node->item;
+    if (col->isTrigger) {
+      phSolveTrigger(col->a, col->b, col);
+    }
   }
 
   _phResetCollisions(self);
@@ -83,13 +96,13 @@ static void _phDdvtTestParticles(phddvt *self, phcollisionlist *collisions) {
   phlist *outBoxCollisions = &collisions->outBoxCollisions;
   #endif
   phint length = self->length;
-  for (phint i = 0; length - i; ++i) {
+  for (phint i = 0; i < length; ++i) {
     phparticle *a = items[i];
     phbox boxA = a->_worldData.oldBox;
     #if PH_THREAD
     phbool inLeafDdvt = a->_worldData.inLeafDdvt;
     #endif
-    for (phint j = i + 1; length - j; ++j) {
+    for (phint j = i + 1; j < length; ++j) {
       phparticle *b = items[j];
       phbox boxB = b->_worldData.oldBox;
 
@@ -142,7 +155,9 @@ static void _phDdvtUpdateList(phddvt *ddvt, phlist *shouldUpdate) {
   while (phListNext(&_litr)) {
     phparticle *particle = _litr.node->item;
     phv position = particle->position;
-    phbox newBox = phAabb(position, particle->radius);
+    phbox newBox = phBoxConstrainSmaller(
+      phAabb(position, particle->radius), ddvt->box
+    );
     phDdvtUpdate(ddvt, particle, particle->_worldData.oldBox, newBox);
     particle->_worldData.oldPosition = position;
     particle->_worldData.oldBox = newBox;
@@ -228,6 +243,13 @@ static void _phThreadCtrlInit(phthreadctrl *self, phworld *w) {
   pthread_mutex_lock(&self->endMutex);
 
   phint cpus = sysconf(_SC_NPROCESSORS_ONLN);
+  if (cpus > 5) {
+    // FIXME
+    // More than 5 threads (possibly only on machines that can run that many)
+    // results in a ddvt of length 1 more is actually stored in it. That extra
+    // length then causes a segfault (EXC_BAD_ACCESS).
+    cpus = 5;
+  }
 
   _phThreadInitGroup(self, cpus);
 }
@@ -245,9 +267,7 @@ static void _phParticleIntegrateDataInit(pharray *self, phint num, phworld *w) {
 static void _phParticleTestDataInit(pharray *self, phint num) {
   *self = pharray(num, calloc(num, sizeof(phparticletestthreaddata *)));
   for (phint i = 0, l = self->capacity; i < l; ++i) {
-    phparticletestthreaddata *data = self->items[i] =
-      phAlloc(phparticletestthreaddata);
-    *data = phparticletestthreaddata();
+    self->items[i] = phCreate(phparticletestthreaddata);
   }
 }
 
@@ -394,7 +414,7 @@ void phWorldInternalStep(phworld *self) {
     if (
       phMag2(phSub(position, oldPosition)) > radius * radius / 10
     ) {
-      newBox = phAabb(position, radius);
+      newBox = phBoxConstrainSmaller(phAabb(position, radius), ddvt->box);
       phDdvtUpdate(ddvt, particle, particle->_worldData.oldBox, newBox);
       particle->_worldData.oldPosition = position;
       particle->_worldData.oldBox = newBox;
@@ -488,7 +508,12 @@ void phWorldStep(phworld *self, phdouble dt) {
 phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
   // particle->_worldData = phAlloc(phparticleworlddata);
   particle->_worldData =
-    phparticleworlddata(phAabb(particle->position, particle->radius));
+    phparticleworlddata(
+      phBoxConstrainSmaller(
+        phAabb(particle->position, particle->radius),
+        self->_optimization.ddvt.box
+      )
+    );
   particle->_worldData.oldPosition = particle->position;
   phAppend(&self->particles, particle);
   if (self->particleArray.capacity == self->particleIndex) {
@@ -539,9 +564,7 @@ phworldgarbage * _phWorldNextGarbage(phworld *self) {
   return garbage;
 }
 
-phworld * _phWorldSafeRemove(
-  phworld *self, void *item, phitrfn fn, phfreefn freefn
-) {
+phworld * phAfterStep(phworld *self, phitrfn fn, phfreefn freefn, void *item) {
   if (self->timing.insideStep) {
     phworldgarbage *garbage = _phWorldNextGarbage(self);
     *garbage = phworldgarbage(item, fn, freefn);
@@ -557,8 +580,8 @@ phworld * _phWorldSafeRemove(
 phworld * phWorldSafeRemoveParticle(
   phworld *self, phparticle *particle, phfreefn freefn
 ) {
-  return _phWorldSafeRemove(
-    self, particle, (phitrfn) phWorldRemoveParticle, freefn
+  return phAfterStep(
+    self, (phitrfn) phWorldRemoveParticle, freefn, particle
   );
 }
 
@@ -583,7 +606,7 @@ phworld * phWorldRemoveConstraint(phworld *self, phconstraint *constraint) {
 phworld * phWorldSafeRemoveConstraint(
   phworld *self, phconstraint *constraint, phfreefn freefn
 ) {
-  return _phWorldSafeRemove(
-    self, constraint, (phitrfn) phWorldRemoveConstraint, freefn
+  return phAfterStep(
+    self, (phitrfn) phWorldRemoveConstraint, freefn, constraint
   );
 }

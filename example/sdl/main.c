@@ -36,6 +36,8 @@
 
 #include "../simple/env.h"
 
+phv screen_size = phv(640, 640);
+
 void main_loop();
 static void process_events();
 
@@ -85,10 +87,75 @@ struct glparticle {
   struct glvertex vertices[6];
 };
 
+static const int gldata_size = 65536;
+
 struct gldata {
   int index;
-  struct glparticle particles[kParticleCount+1024];
+  struct glparticle particles[gldata_size];
 };
+
+static void set_mesh_square(
+  struct glparticle *glp, phbox box, struct glcolor color
+) {
+  *glp = (struct glparticle) {{
+    {box.left, box.top, color},
+    {box.right, box.top, color},
+    {box.right, box.bottom, color},
+    {box.left, box.top, color},
+    {box.left, box.bottom, color},
+    {box.right, box.bottom, color}
+  }};
+}
+
+static const phdouble mesh_cell_size = 5;
+static const phdouble mesh_cells_wide = 640 / mesh_cell_size;
+
+static void reset_water_mesh(struct gldata *data) {
+  for (int i = 0, l = gldata_size; i < l; ++i) {
+    set_mesh_square(&data->particles[i], phbox(0, 0, 0, 0), (struct glcolor) {0, 0, 0, 0});
+  }
+  data->index = mesh_cells_wide * (640 / mesh_cell_size);
+  if (gldata_size > data->index) {
+    data->index = gldata_size;
+  }
+}
+
+static void init_water_mesh(struct gldata *data) {
+  reset_water_mesh(data);
+}
+
+static void toggle_water_mesh_cells(struct gldata *data, phparticle *particle) {
+  phbox box = phAabb(particle->position, particle->radius);
+  // Align box with mesh_cell_size
+  box.left = floor(box.left / mesh_cell_size) * mesh_cell_size;
+  box.top = ceil(box.top / mesh_cell_size) * mesh_cell_size;
+  box.right = ceil(box.right / mesh_cell_size) * mesh_cell_size;
+  box.bottom = floor(box.bottom / mesh_cell_size) * mesh_cell_size;
+  for (
+    phdouble l = box.left, r = box.right;
+    l < r && l < 640 && l >= 0;
+    l += mesh_cell_size
+  ) {
+    for (
+      phdouble b = box.bottom, t = box.top;
+      b < t &&
+        b < floor((gldata_size) / floor(mesh_cells_wide) * mesh_cell_size) &&
+        b >= 0;
+      b += mesh_cell_size
+    ) {
+      int index = 
+        b / mesh_cell_size * floor(mesh_cells_wide) + l / mesh_cell_size;
+      if (data->particles[index].vertices[0].color.a != 255) {
+        phbox square = phbox(l, b + mesh_cell_size, l + mesh_cell_size, b);
+        set_mesh_square(
+          &data->particles[index],
+          square,
+          (struct glcolor) {0, 0, 255, particle->isStatic ? 128: 255}
+        );
+      }
+    }
+  }
+}
 
 static void set_particle_vertices(struct gldata *data, phparticle *particle) {
   struct glcolor color = { 255, 255, 255, 128 };
@@ -99,18 +166,95 @@ static void set_particle_vertices(struct gldata *data, phparticle *particle) {
 
   phbox particlebox = phAabb(particle->position, particle->radius);
   struct glparticle *glp = &data->particles[data->index];
-  *glp = (struct glparticle) {{
-    {particlebox.left, particlebox.top, color},
-    {particlebox.right, particlebox.top, color},
-    {particlebox.right, particlebox.bottom, color},
-    {particlebox.left, particlebox.top, color},
-    {particlebox.left, particlebox.bottom, color},
-    {particlebox.right, particlebox.bottom, color}
-  }};
+  set_mesh_square(glp, particlebox, color);
   data->index++;
 }
 
-void stepInput() {}
+typedef struct phmouse {
+  phint button;
+  phbool pressed;
+  phv position;
+} phmouse;
+
+#define phmouse() ((phmouse) { \
+  0, 0, 0, 0 \
+})
+
+struct {
+  phlist particles;
+  phlist constraints;
+} flowline = {
+  phlist(),
+  phlist()
+};
+
+void input(phmouse *state, phmouse *lastState) {
+  if (state->pressed && !lastState->pressed) {
+    phlistiterator litr;
+    // Remove current particles.
+    phIterate(
+      phIterator(&flowline.particles, &litr),
+      (phitrfn) phWorldRemoveParticle,
+      world
+    );
+    phIterate(
+      phIterator(&flowline.constraints, &litr),
+      (phitrfn) phWorldRemoveConstraint,
+      world
+    );
+    // Free current particles.
+    phIterate(
+      phIterator(&flowline.particles, &litr),
+      (phitrfn) phCall,
+      (phitrfn) phParticleDump
+    );
+    phClean(&flowline.particles, free);
+    phClean(&flowline.constraints, free);
+    // Add first particle.
+    phparticle *particle = phCreate(phparticle, state->position);
+    particle->radius = 50;
+    phflow *flow = phCreate(
+      phflow,
+      particle,
+      phScale(phUnit(phv(1, 1)), 1000)
+    );
+    phAppend(&flowline.particles, particle);
+    phAppend(&flowline.constraints, flow);
+    printf("press\n");
+  } else if (state->pressed && lastState->pressed) {
+    // If far enough, add new particle.
+    phparticle *lastParticle = flowline.particles.last->item;
+    if (phMag(phSub(state->position, lastParticle->position)) > 10) {
+      phflow *lastFlow = flowline.constraints.last->item;
+      lastFlow->force =
+        phScale(phUnit(phSub(state->position, lastParticle->position)), 1000);
+
+      phparticle *particle = phCreate(phparticle, state->position);
+      particle->radius = 50;
+      phflow *flow = phCreate(
+        phflow,
+        particle,
+        phScale(phUnit(phSub(state->position, lastState->position)), 1000)
+      );
+      phAppend(&flowline.particles, particle);
+      phAppend(&flowline.constraints, flow);
+    }
+  } else if (lastState->pressed && !state->pressed) {
+    // Add particles to world.
+    phlistiterator litr;
+    phIterate(
+      phIterator(&flowline.particles, &litr),
+      (phitrfn) phWorldAddParticle,
+      world
+    );
+    phIterate(
+      phIterator(&flowline.constraints, &litr),
+      (phitrfn) phWorldAddConstraint,
+      world
+    );
+    printf("release\n");
+  }
+}
 
 void draw() {
   glClearColor(0,0,0,0);
@@ -155,10 +299,12 @@ void draw() {
 
   struct gldata data;
   data.index = 0;
+  reset_water_mesh(&data);
   phworldparticleiterator _wpitr;
   phWorldParticleIterator(world, &_wpitr);
   while (phWorldParticleNext(&_wpitr)) {
-    set_particle_vertices(&data, phWorldParticleDeref(&_wpitr));
+    // set_particle_vertices(&data, phWorldParticleDeref(&_wpitr));
+    toggle_water_mesh_cells(&data, phWorldParticleDeref(&_wpitr));
   }
 
   glBindBuffer(GL_ARRAY_BUFFER, buffer);
@@ -186,9 +332,10 @@ int main(int argc, char *argv[])
   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 ); // *new*
 
   #if EMSCRIPTEN
-  screen = SDL_SetVideoMode( 640, 640, 16, SDL_OPENGL | SDL_RESIZABLE ); // *changed*
+  screen = SDL_SetVideoMode( phvunpack(screen_size), 16, SDL_OPENGL |
+    SDL_RESIZABLE );
   #else
-  screen = SDL_SetVideoMode( 640, 640, 16, SDL_OPENGL ); // *changed*  
+  screen = SDL_SetVideoMode( phvunpack(screen_size), 16, SDL_OPENGL );
   #endif
   if ( !screen ) {
     printf("Unable to set video mode: %s\n", SDL_GetError());
@@ -213,8 +360,10 @@ int main(int argc, char *argv[])
   printf( "VIEWPORT dimensions %d %d %d %d.\n", VIEWPORT_DIMENSIONS );
   VIEWPORT();
 #else
-  printf( "VIEWPORT dimensions %d %d %d %d.\n", 0, 0, 640, 640 );
-  glViewport( 0, 0, 640, 640 );
+  printf( "VIEWPORT dimensions %d %d %d %d.\n",
+    0, 0, phvunpackfmt(screen_size, int)
+  );
+  glViewport( 0, 0, phvunpack(screen_size) );
 #endif
 #if EMSCRIPTEN
   emscripten_set_main_loop(main_loop, 0, 0);
@@ -283,16 +432,19 @@ void main_loop() {
   lastTicks = newTicks;
 }
 
-static void process_events( void )
-{
+phmouse mousestate = phmouse();
+
+static void process_events(void) {
   /* Our SDL event placeholder. */
   SDL_Event event;
 
   int hadEvent = 0;
 
+  phmouse newmousestate = mousestate;
+
   /* Grab all the events off the queue. */
-  while( SDL_PollEvent( &event ) ) {
-    switch( event.type ) {
+  while(SDL_PollEvent(&event)) {
+    switch(event.type) {
       case SDL_KEYDOWN:
       if (event.key.keysym.sym == SDLK_ESCAPE) {
         SDL_Quit();
@@ -300,16 +452,42 @@ static void process_events( void )
       }
       break;
 
+      case SDL_MOUSEBUTTONDOWN:
+      newmousestate.button = event.button.button;
+      newmousestate.pressed = 1;
+      newmousestate.position =
+        phv(event.button.x, screen_size.y - event.button.y);
+      input(&newmousestate, &mousestate);
+      mousestate = newmousestate;
+      break;
+
+      case SDL_MOUSEBUTTONUP:
+      newmousestate.button = event.button.button;
+      newmousestate.pressed = 0;
+      newmousestate.position =
+        phv(event.button.x, screen_size.y - event.button.y);
+      input(&newmousestate, &mousestate);
+      mousestate = newmousestate;
+      break;
+
+      case SDL_MOUSEMOTION:
+      newmousestate.position =
+        phv(event.motion.x, screen_size.y - event.motion.y);
+      input(&newmousestate, &mousestate);
+      mousestate = newmousestate;
+      break;
+
       case SDL_QUIT:
       /* Handle quit requests (like Ctrl-c). */
       SDL_Quit();
-      exit( 0 );
+      exit(0);
       break;
 
       default:
       break;
     }
-
-    stepInput();
   }
+
+  input(&newmousestate, &mousestate);
+  mousestate = newmousestate;
 }
