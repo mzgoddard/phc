@@ -97,8 +97,6 @@ static void _phAckCollision(phparticle *self, phparticle *other) {
 }
 
 phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
-  if (self->isStatic && other->isStatic) {return 0;}
-
   if (
     (self->collideAgainst & other->collideMask) == 0 || 
       (other->collideAgainst & self->collideMask) == 0
@@ -120,22 +118,18 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
 
   ingress = abx*abx+aby*aby;
   if (((ingress < abr*abr))) {
-    if (phIgnoresOther(self, other) || phIgnoresOther(self, other->data)) {
-      return 0;
-    }
+    col->isTrigger = self->isTrigger || other->isTrigger;
 
-    if (self->isTrigger || other->isTrigger) {
-      col->isTrigger = 1;
+    if (col->isTrigger) {
+      col->isNormal = col->isStatic = 0;
       return 1;
-    } else {
-      col->isTrigger = 0;
     }
 
-    ingress = sqrt(ingress);
+    col->isStatic = self->isStatic;
+    col->isNormal = !col->isStatic;
 
-    if ( ingress == 0.0 ) {
-      ingress = 1e-5;
-    }
+    // Increase the ingress by a small value so its not zero.
+    ingress = sqrt(ingress) + 1e-5;
 
     phdouble pqt = abr / ingress - 1;
     // col->distance = abr - ingress;
@@ -148,23 +142,29 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
   return 0;
 }
 
-void phSolve(phparticle *self, phparticle *other, phcollision *col) {
-  if (col->isTrigger) {
-    return;
-  }
-
+static phbool _phPreSolve(phparticle *self, phparticle *other) {
   if (_phHasCollidedAlready(self, other)) {
-    return;
+    return 1;
   }
 
   _phAckCollision(self, other);
   _phAckCollision(other, self);
 
-  phv
-    *selfpos = &(self->position),
-    *otherpos = &(other->position),
-    *selflast = &(self->lastPosition),
-    *otherlast = &(other->lastPosition);
+  // Test ignores after so that the faster hasCollided can handle
+  // repeated collisions.
+  if (phIgnoresOther(self, other) || phIgnoresOther(self, other->data)) {
+    return 1;
+  }
+
+  return 0;
+}
+
+void phSolve(phcollision *col) {
+  phparticle *self = col->a, *other = col->b;
+
+  if (_phPreSolve(self, other)) {
+    return;
+  }
 
   phdouble
     factor = (self->factor * other->factor),
@@ -175,10 +175,10 @@ void phSolve(phparticle *self, phparticle *other, phcollision *col) {
     mass = amsq + bmsq,
     am = bmsq / mass,
     bm = amsq / mass,
-    avx = selflast->x - selfpos->x,
-    avy = selflast->y - selfpos->y,
-    bvx = otherlast->x - otherpos->x,
-    bvy = otherlast->y - otherpos->y,
+    avx = self->lastPosition.x - self->position.x,
+    avy = self->lastPosition.y - self->position.y,
+    bvx = other->lastPosition.x - other->position.x,
+    bvy = other->lastPosition.y - other->position.y,
     fric = 1 - (self->friction * other->friction);
 
   avx *= fric;
@@ -186,32 +186,47 @@ void phSolve(phparticle *self, phparticle *other, phcollision *col) {
   bvx *= fric;
   bvy *= fric;
 
-  if (self->isStatic) {
-    am = 0;
-    bm = 1;
-  } else if (other->isStatic) {
-    am = 1;
-    bm = 0;
-  }
+  self->lastPosition.x = self->position.x + avx;
+  self->lastPosition.y = self->position.y + avy;
+  self->position.x += lambx * am;
+  self->position.y += lamby * am;
 
-  selflast->x = selfpos->x + avx;
-  selflast->y = selfpos->y + avy;
-  selfpos->x += lambx * am;
-  selfpos->y += lamby * am;
-
-  otherlast->x = otherpos->x + bvx;
-  otherlast->y = otherpos->y + bvy;
-  otherpos->x -= lambx * bm;
-  otherpos->y -= lamby * bm;
+  other->lastPosition.x = other->position.x + bvx;
+  other->lastPosition.y = other->position.y + bvy;
+  other->position.x -= lambx * bm;
+  other->position.y -= lamby * bm;
 }
 
-void phSolveTrigger(phparticle *self, phparticle *other, phcollision *col) {
-  if (_phHasCollidedAlready(self, other)) {
+void phSolveStatic(phcollision *col) {
+  phparticle *self = col->a, *other = col->b;
+
+  if (_phPreSolve(self, other)) {
     return;
   }
 
-  _phAckCollision(self, other);
-  _phAckCollision(other, self);
+  phdouble
+    factor = (self->factor * other->factor),
+    lambx = (col->lambx) * factor,
+    lamby = (col->lamby) * factor,
+    bvx = other->lastPosition.x - other->position.x,
+    bvy = other->lastPosition.y - other->position.y,
+    fric = 1 - (self->friction * other->friction);
+
+  bvx *= fric;
+  bvy *= fric;
+
+  other->lastPosition.x = other->position.x + bvx;
+  other->lastPosition.y = other->position.y + bvy;
+  other->position.x -= lambx;
+  other->position.y -= lamby;
+}
+
+void phSolveTrigger(phcollision *col) {
+  phparticle *self = col->a, *other = col->b;
+
+  if (_phPreSolve(self, other)) {
+    return;
+  }
 
   if (self->collide) {
     self->collide(self, other, col);

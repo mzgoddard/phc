@@ -25,29 +25,22 @@ static phcollision *_phNextCollision(phcollisionlist *self) {
   return col;
 }
 
-static void _phSaveCollision(phcollisionlist *self) {
-  phcollision *col = phShift(&self->nextCollisions);
-  if (!self->collisions.freeList) {
+static void _phCollisionsPushFreeList(
+  phcollisionlist *self, phlist *collisions
+) {
+  if (!collisions->freeList) {
     self->nextCollisions.freeList =
-      (self->collisions.freeList =
+      (collisions->freeList =
         self->nextCollisions.freeList)->next;
-    self->collisions.freeList->next = NULL;
-  }
-  phAppend(&self->collisions, col);
-  if (col->isTrigger) {
-    phAppend(&self->triggerCollisions, col);
+    collisions->freeList->next = NULL;
   }
 }
 
-static void _phResetCollisions(phcollisionlist *self) {
+static void _phCollisionsUnloadFreeList(
+  phcollisionlist *self, phlist *collisions
+) {
   // Empty collisions into nextCollisions.
-  phlist *collisions = &self->collisions;
   phlist *nextCollisions = &self->nextCollisions;
-  if (collisions->length > nextCollisions->length) {
-    phlist tmp = *collisions;
-    *collisions = *nextCollisions;
-    *nextCollisions = tmp;
-  }
   if (collisions->length) {
     collisions->last->next = nextCollisions->first;
     if (nextCollisions->first) {
@@ -62,27 +55,53 @@ static void _phResetCollisions(phcollisionlist *self) {
     nextCollisions->length += collisions->length;
     collisions->length = 0;
   }
-  phClean(&self->inBoxCollisions, NULL);
-  phClean(&self->outBoxCollisions, NULL);
+}
+
+static void _phSaveCollision(phcollisionlist *self) {
+  phcollision *col = phShift(&self->nextCollisions);
+  if (col->isNormal) {
+    _phCollisionsPushFreeList(self, &self->normalCollisions);
+    phAppend(&self->normalCollisions, col);
+  } else if (col->isStatic) {
+    _phCollisionsPushFreeList(self, &self->staticCollisions);
+    phAppend(&self->staticCollisions, col);
+  } else {
+    _phCollisionsPushFreeList(self, &self->triggerCollisions);
+    phAppend(&self->triggerCollisions, col);
+  }
+}
+
+static void _phResetCollisions(phcollisionlist *self) {
+  // phClean(&self->inBoxCollisions, NULL);
+  // phClean(&self->outBoxCollisions, NULL);
+  _phCollisionsUnloadFreeList(self, &self->normalCollisions);
+  phClean(&self->normalCollisions, NULL);
+  _phCollisionsUnloadFreeList(self, &self->staticCollisions);
+  phClean(&self->staticCollisions, NULL);
+  _phCollisionsUnloadFreeList(self, &self->triggerCollisions);
   phClean(&self->triggerCollisions, NULL);
 }
 
 static void _phSolveCollisions(phcollisionlist *self) {
   phlistiterator _litr;
-  phiterator *itr = phIterator(&self->collisions, &_litr);
-  while (phListNext((phlistiterator *) itr)) {
+  pharrayiterator _aitr;
+  phIterator(&self->normalCollisions, &_litr);
+  while (phListNext(&_litr)) {
     // phcollision *col = phListDeref((phlistiterator *) itr);
     phcollision *col = _litr.node->item;
-    if (!col->isTrigger) {
-      phSolve(col->a, col->b, col);
-    }
+    phSolve(col);
+  }
+  phIterator(&self->staticCollisions, &_litr);
+  while (phListNext(&_litr)) {
+    // phcollision *col = phListDeref((phlistiterator *) itr);
+    phcollision *col = _litr.node->item;
+    phSolveStatic(col);
   }
   phIterator(&self->triggerCollisions, &_litr);
   while (phListNext(&_litr)) {
+    // phcollision *col = phListDeref((phlistiterator *) itr);
     phcollision *col = _litr.node->item;
-    if (col->isTrigger) {
-      phSolveTrigger(col->a, col->b, col);
-    }
+    phSolveTrigger(col);
   }
 
   _phResetCollisions(self);
@@ -91,38 +110,51 @@ static void _phSolveCollisions(phcollisionlist *self) {
 static void _phDdvtTestParticles(phddvt *self, phcollisionlist *collisions) {
   phcollision *nextCollision = _phNextCollision(collisions);
   phparticle **items = (phparticle **) self->_particleArray.items;
-  #if PH_THREAD
-  phlist *inBoxCollisions = &collisions->inBoxCollisions;
-  phlist *outBoxCollisions = &collisions->outBoxCollisions;
-  #endif
+  // #if PH_THREAD
+  // phlist *inBoxCollisions = &collisions->inBoxCollisions;
+  // phlist *outBoxCollisions = &collisions->outBoxCollisions;
+  // #endif
   phint length = self->length;
   for (phint i = 0; i < length; ++i) {
-    phparticle *a = items[i];
+    phparticle *a = items[i], *_a;
     phbox boxA = a->_worldData.oldBox;
-    #if PH_THREAD
-    phbool inLeafDdvt = a->_worldData.inLeafDdvt;
-    #endif
+    // #if PH_THREAD
+    // phbool inLeafDdvt = a->_worldData.inLeafDdvt;
+    // #endif
     for (phint j = i + 1; j < length; ++j) {
       phparticle *b = items[j];
       phbox boxB = b->_worldData.oldBox;
 
       // Pre test with boxes, which is cheaper than circle test. Then
       // circle test.
-      if (phIntersect(boxA, boxB) && phTest(a, b, nextCollision)) {
-        nextCollision->a = a;
-        nextCollision->b = b;
-        _phSaveCollision(collisions);
-        // Sorting collisions by whether they are solely contained in a ddvt
-        // has a fairly large performance hit. And solving those in threads
-        // doesn't counteract the hit enough to keep it.
-        // #if PH_THREAD
-        // if (inLeafDdvt && b->_worldData.inLeafDdvt) {
-        //   phAppend(inBoxCollisions, nextCollision);
-        // } else {
-        //   phAppend(outBoxCollisions, nextCollision);
-        // }
-        // #endif
-        nextCollision = _phNextCollision(collisions);
+      if (phIntersect(boxA, boxB)) {
+        _a = a;
+        // Make the static particle always be first.
+        if (b->isStatic) {
+          _a = b;
+          b = a;
+        }
+        // Both particles are static, skip testing it further.
+        if (b->isStatic) {
+          continue;
+        }
+
+        if (phTest(_a, b, nextCollision)) {
+          nextCollision->a = _a;
+          nextCollision->b = b;
+          _phSaveCollision(collisions);
+          // Sorting collisions by whether they are solely contained in a ddvt
+          // has a fairly large performance hit. And solving those in threads
+          // doesn't counteract the hit enough to keep it.
+          // #if PH_THREAD
+          // if (inLeafDdvt && b->_worldData.inLeafDdvt) {
+          //   phAppend(inBoxCollisions, nextCollision);
+          // } else {
+          //   phAppend(outBoxCollisions, nextCollision);
+          // }
+          // #endif
+          nextCollision = _phNextCollision(collisions);
+        }
       }
     }
   }
@@ -161,8 +193,8 @@ static void _phDdvtUpdateList(phddvt *ddvt, phlist *shouldUpdate) {
     phDdvtUpdate(ddvt, particle, particle->_worldData.oldBox, newBox);
     particle->_worldData.oldPosition = position;
     particle->_worldData.oldBox = newBox;
-    particle->_worldData.inLeafDdvt =
-      !((phddvt *) particle->_worldData.topDdvt)->tl;
+    // particle->_worldData.inLeafDdvt =
+    //   !((phddvt *) particle->_worldData.topDdvt)->tl;
   }
   phClean(shouldUpdate, NULL);
 }
@@ -215,9 +247,7 @@ void _phParticleSolveThreadHandle(phparticlesolvethreaddata *self) {
   phIterator(self->collisions, &_litr);
   while (phListNext(&_litr)) {
     phcollision *col = _litr.node->item;
-    phparticle *a = col->a;
-    phparticle *b = col->b;
-    phSolve(a, b, col);
+    phSolve(col);
   }
 }
 
@@ -353,9 +383,7 @@ static void _phSolveCollisionsWithThreads(phworld *self) {
     while (phListNext(&_litr)) {
       // phcollision *col = phListDeref((phlistiterator *) itr);
       phcollision *col = _litr.node->item;
-      phparticle *a = col->a;
-      phparticle *b = col->b;
-      phSolve(a, b, col);
+      phSolve(col);
     }
     _phResetCollisions(&testData->collisions);
   }
@@ -555,8 +583,8 @@ phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
   }
   self->particleArray.items[self->particleIndex++] = particle;
   phDdvtAdd(&self->_optimization.ddvt, particle);
-  particle->_worldData.inLeafDdvt =
-    !((phddvt *) particle->_worldData.topDdvt)->tl;
+  // particle->_worldData.inLeafDdvt =
+  //   !((phddvt *) particle->_worldData.topDdvt)->tl;
   return self;
 }
 
