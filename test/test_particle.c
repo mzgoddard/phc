@@ -10,7 +10,9 @@ void test_particle() {
     phparticle b = phparticle(phv(0.5, 0));
     phcollision col;
     ok(phTest(&a, &b, &col), "particle a and b collide.");
-    phSolve(&a, &b, &col);
+    col.a = &a;
+    col.b = &b;
+    phSolve(&col);
     phdouble adiff = fabs(phMag(phSub(a.position, phv(-0.1875, 0))));
     phdouble bdiff = fabs(phMag(phSub(b.position, phv(0.6875, 0))));
     ok(adiff < 0.001, "diff of expected a position, %f < 0.001", adiff);
@@ -26,13 +28,17 @@ void test_particle() {
     c.data = &arbitrary;
     phcollision col;
     phIgnore(&a, &b);
-    ok(!phTest(&a, &b, &col), "a ignored collision with b.");
+    ok(phIgnoresOther(&a, &b), "a ignored collision with b.");
     phIgnore(&a, &arbitrary);
-    ok(!phTest(&a, &c, &col), "a ignored collision with given data.");
+    ok(phIgnoresOther(&a, c.data), "a ignored collision with given data.");
     phStopIgnore(&a, &arbitrary);
-    ok(phTest(&a, &c, &col), "phStopIgnore removed data. Allowed collision.");
+    ok(!phIgnoresOther(&a, c.data),
+      "phStopIgnore removed data. Allowed collision."
+    );
     phIgnore(&a, &arbitrary);
     phStopIgnore(&a, &b);
-    ok(phTest(&a, &b, &col), "phStopIgnore removed b. Allowed collision.");
+    ok(!phIgnoresOther(&a, &b),
+      "phStopIgnore removed b. Allowed collision."
+    );
   }
 }

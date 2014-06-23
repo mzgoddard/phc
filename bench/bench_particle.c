@@ -29,7 +29,9 @@ void b_testsolve1000(void *ctx) {
 
   for (int i = 0; i < 1000; ++i) {
     phTest(&a, &b, &col);
-    phSolve(&a, &b, &col);
+    col.a = &a;
+    col.b = &b;
+    phSolve(&col);
     a.position = phZero();
     b.position = phv(0.5, 0);
   }
