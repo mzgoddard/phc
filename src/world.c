@@ -174,6 +174,30 @@ void _phParticleIntegrateThreadHandle(phparticleintegratethreaddata *self) {
   _phWorldIntegrateParticles(&self->particleItr, &self->shouldUpdate, dt);
 }
 
+static void _phParticleTestDataResetDdvts(phparticletestthreaddata *self) {
+  phlistiterator litr;
+  phIterator(&self->ddvts, &litr);
+  while (phListNext(&litr)) {
+    phddvt *ddvt = phListDeref(&litr);
+    phAppend(&self->freeDdvts, ddvt);
+  }
+  phClean(&self->ddvts, NULL);
+}
+
+static phddvt * _phParticleTestDataNextDdvt(
+  phparticletestthreaddata *self, phddvt *toCopy
+) {
+  phddvt *ddvt = phShift(&self->freeDdvts);
+  if (!ddvt) {
+    ddvt = phCreate(
+      phddvt, NULL, toCopy->box, toCopy->minParticles, toCopy->maxParticles
+    );
+    ddvt->_particleArray.items = (void**) &ddvt->_particleItems;
+  }
+  phAppend(&self->ddvts, ddvt);
+  return ddvt;
+}
+
 void _phParticleTestThreadHandle(phparticletestthreaddata *self) {
   if (self->ddvts.length) {
     phlistiterator _litr;
@@ -181,7 +205,8 @@ void _phParticleTestThreadHandle(phparticletestthreaddata *self) {
     while (phListNext(&_litr)) {
       _phDdvtTestParticles(_litr.node->item, &self->collisions);
     }
-    phClean(&self->ddvts, NULL);
+    _phParticleTestDataResetDdvts(self);
+    // phClean(&self->ddvts, NULL);
   }
 }
 
@@ -243,13 +268,6 @@ static void _phThreadCtrlInit(phthreadctrl *self, phworld *w) {
   pthread_mutex_lock(&self->endMutex);
 
   phint cpus = sysconf(_SC_NPROCESSORS_ONLN);
-  if (cpus > 5) {
-    // FIXME
-    // More than 5 threads (possibly only on machines that can run that many)
-    // results in a ddvt of length 1 more is actually stored in it. That extra
-    // length then causes a segfault (EXC_BAD_ACCESS).
-    cpus = 5;
-  }
 
   _phThreadInitGroup(self, cpus);
 }
@@ -438,7 +456,16 @@ void phWorldInternalStep(phworld *self) {
     while (phDdvtPairNext(&_ditr)) {
       _ditr.arrayItr1.test = 0;
       phparticletestthreaddata *data = self->particleTestThreadData.items[i];
-      phAppend(&data->ddvts, _ditr.ddvt);
+      // Copy particles and length into ddvt clones that only that thread's
+      // data will access.
+      phddvt *ddvtClone = _phParticleTestDataNextDdvt(data, _ditr.ddvt);
+      for (phint j = 0; j < _ditr.ddvt->length; ++j) {
+        ddvtClone->_particleArray.items[j] =
+          _ditr.ddvt->_particleArray.items[j];
+      }
+      ddvtClone->_particleArray.capacity = _ditr.ddvt->length;
+      ddvtClone->length = _ditr.ddvt->length;
+      // phAppend(&data->ddvts, _ditr.ddvt);
       if (++i >= numThreads) {
         i = 0;
       }

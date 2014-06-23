@@ -419,11 +419,12 @@ typedef struct phparticleintegratethreaddata {
 
 typedef struct phparticletestthreaddata {
   phlist ddvts;
+  phlist freeDdvts;
   phcollisionlist collisions;
 } phparticletestthreaddata;
 
 #define phparticletestthreaddata() ((phparticletestthreaddata) { \
-  phlist(), phcollisionlist() \
+  phlist(), phlist(), phcollisionlist() \
 })
 
 typedef struct phparticlesolvethreaddata {
