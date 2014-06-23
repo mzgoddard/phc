@@ -739,7 +739,7 @@ phlist * phRemoveLast(phlist *, void *);
   (phiteratornext) phListNext, (phiteratorderef) phListDeref, list, node, \
   list->first, NULL, NULL \
 })
-  
+
 static phlist * phAppend(phlist *self, void *item) {
   phlistnode *node = self->freeList;
   if (node) {
