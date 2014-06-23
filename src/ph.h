@@ -750,10 +750,10 @@ static phlist * phAppend(phlist *self, void *item) {
 
   *node = phlistnode(NULL, self->last, item);
 
-  if (!self->first) {
-    self->first = node;
-  } else {
+  if (self->first) {
     self->last->next = node;
+  } else {
+    self->first = node;
   }
   self->last = node;
 
