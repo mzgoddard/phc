@@ -59,8 +59,10 @@ static phbool _phHasCollidedAlready(phparticle *self, phparticle *other) {
   //   phIterator(&self->_worldData.collideWith, &_listitr),
   //   other
   // );
-  for (phint i = 0; i < self->_worldData.collideWithIndex; ++i) {
-    if (self->_worldData.collideWith.items[i] == other) {
+  phint length = self->_worldData.collideWithIndex;
+  void **items = self->_worldData.collideWith.items;
+  for (phint i = length - 1; i + 1; --i) {
+    if (items[i] == other) {
       return 1;
     }
   }
