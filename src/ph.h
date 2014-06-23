@@ -818,6 +818,16 @@ static void phClean(phlist *self, void (*freeItem)(void *)) {
   self->last = NULL;
 }
 
+static void * phFirst(phlist *self) {
+  phlistnode *node = self->first;
+  return node ? node->item : NULL;
+}
+
+static void * phLast(phlist *self) {
+  phlistnode *node = self->last;
+  return node ? node->item : NULL;
+}
+
 static phbool phListNext(_phlistiterator *self) {
   phlistnode *node = self->node;
   return node ? self->node = node->next : NULL;
