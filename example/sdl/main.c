@@ -180,20 +180,30 @@ typedef struct phmouse {
   0, 0, 0, 0 \
 })
 
-phcomposite flowline = phcomposite(phlist(), phlist());
+phcompositeline flowline = phcompositeline(
+  phcomposite(phlist(), phlist()), 3
+);
 
-void addFlowParticle(phcomposite *self, phv position, phv lastPosition) {
-  phparticle *particle = phCreate(phparticle, position);
-  particle->radius = 50;
+void addFlowParticle(void *_self, void *_position) {
+  phcomposite *self = _self;
+  phv position = *(phv*) _position;
+  phparticle *last = phLast(&self->particles);
+  phv lastPosition = last ? last->position : position;
+
   phv direction = phSub(position, lastPosition);
   if (phMag2(direction) == 0) {
     direction = phv(1, 1);
   }
-  phflow *flow = phCreate(
-    phflow,
-    particle,
-    phScale(phUnit(direction), 1000)
-  );
+  phv force = phScale(phUnit(direction), 1000);
+
+  phflow *lastFlow = phLast(&self->constraints);
+  if (lastFlow) {
+    lastFlow->force = force;
+  }
+
+  phparticle *particle = phCreate(phparticle, position);
+  particle->radius = 10;
+  phflow *flow = phCreate(phflow, particle, force);
   phAppend(&self->particles, particle);
   phAppend(&self->constraints, flow);
 }
@@ -201,25 +211,18 @@ void addFlowParticle(phcomposite *self, phv position, phv lastPosition) {
 void input(phmouse *state, phmouse *lastState) {
   if (state->pressed && !lastState->pressed) {
     // Remove current particles.
-    phWorldRemoveComposite(world, &flowline);
+    phWorldRemoveComposite(world, (phcomposite *) &flowline);
     // Free current particles.
-    phCompositeDump(&flowline);
+    phCompositeLineDump(&flowline);
     // Add first particle.
-    addFlowParticle(&flowline, state->position, lastState->position);
+    phCompositeLineAdd(&flowline, state->position, addFlowParticle);
     printf("press\n");
   } else if (state->pressed && lastState->pressed) {
     // If far enough, add new particle.
-    phparticle *lastParticle = flowline.particles.last->item;
-    if (phMag(phSub(state->position, lastParticle->position)) > 10) {
-      phflow *lastFlow = flowline.constraints.last->item;
-      lastFlow->force =
-        phScale(phUnit(phSub(state->position, lastParticle->position)), 1000);
-
-      addFlowParticle(&flowline, state->position, lastState->position);
-    }
+    phCompositeLineAdd(&flowline, state->position, addFlowParticle);
   } else if (lastState->pressed && !state->pressed) {
     // Add particles to world.
-    phWorldAddComposite(world, &flowline);
+    phWorldAddComposite(world, (phcomposite *) &flowline);
     printf("release\n");
   }
 }

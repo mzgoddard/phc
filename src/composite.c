@@ -18,4 +18,29 @@ phcomposite * phCompositeDump(phcomposite *self) {
   );
   phDump(&self->particles, free);
   phDump(&self->constraints, free);
+  return self;
+}
+
+phcompositeline * phCompositeLineDump(phcompositeline *self) {
+  phCompositeDump((phcomposite *) self);
+  return self;
+}
+
+phcompositeline * phCompositeLineAdd(
+  phcompositeline *self, phv pt, phitrfn adder
+) {
+  if (!self->composite.particles.length) {
+    adder(self, &pt);
+  } else {
+    phparticle *last = phLast(&self->composite.particles);
+    phv lastPoint = last->position;
+    while (phMag(phSub(pt, lastPoint)) > self->distanceBetweenPoints) {
+      lastPoint = phAdd(
+        lastPoint,
+        phScale(phUnit(phSub(pt, lastPoint)), self->distanceBetweenPoints)
+      );
+      adder(self, &lastPoint);
+    }
+  }
+  return self;
 }

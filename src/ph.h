@@ -594,6 +594,15 @@ typedef struct phcomposite {
  constraints \
 })
 
+typedef struct phcompositeline {
+  phcomposite composite;
+  phdouble distanceBetweenPoints;
+} phcompositeline;
+
+#define phcompositeline(composite, distance) ((phcompositeline) { \
+  composite, distance \
+})
+
 #ifdef EMSCRIPTEN
 // Compiling under emscripten complains about implicit sqrt declaration.
 // double sqrt(double);
@@ -1043,5 +1052,10 @@ phbyte * phCompositeFreeze(phcomposite *);
 phcomposite * phCompositeThaw(phcomposite *, phbyte *);
 phcomposite * phCompositeCopy(phcomposite *dst, phcomposite *src);
 phcomposite * phCompositeDump(phcomposite *);
+
+// phCompositeLine
+
+phcompositeline * phCompositeLineDump(phcompositeline *);
+phcompositeline * phCompositeLineAdd(phcompositeline *, phv, phitrfn);
 
 #endif /* end of include guard: PH_H_7BP0TPQV */
