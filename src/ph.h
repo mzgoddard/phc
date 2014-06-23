@@ -540,12 +540,13 @@ typedef phchar phconstraintid[];
 typedef struct phconstrainttype {
   phconstraintid *id;
   void * (*copy)(void *, phlist *, phlist *);
+  void * (*dump)(void *);
   phbool (*beforeStep)(void *);
   void (*update)(void *, phworld *);
 } phconstrainttype;
 
-#define phconstrainttype(id, copy, before, update) ((phconstrainttype) { \
-  id, copy, before, update \
+#define phconstrainttype(id, copy, dump, before, update) ((phconstrainttype) { \
+  id, copy, dump, before, update \
 })
 
 #define phconstrainttypefromname(id, name) \
@@ -956,6 +957,7 @@ void phSetScaledVelocity(phparticle *, phv, phdouble dt);
 // phConstraint
 
 phconstraint * phConstraintCopy(void *, phlist *dst, phlist *src);
+phconstraint * phConstraintDump(void *);
 phbool phConstraintBeforeStep(void *);
 void phConstraintUpdate(phworld *, void *);
 

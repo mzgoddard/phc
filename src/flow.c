@@ -5,6 +5,11 @@ void * phFlowCopy(void *_flow, phlist *dst, phlist *src) {
   return NULL;
 }
 
+void * phFlowDump(void *_flow) {
+  // Nothing to dump.
+  return _flow;
+}
+
 void phFlowCollide(phparticle *a, phparticle *b, phcollision *col) {
   phflow *flow = a->data;
   b->acceleration = phAdd(phScale(flow->force, 1 / b->mass), b->acceleration);
@@ -24,5 +29,5 @@ void phFlowUpdate(void *_flow, phworld *world) {}
 
 phconstraintid phflowid = "phflow";
 phconstrainttype *phflowtype = &(phconstrainttype(
-  &phflowid, phFlowCopy, phFlowBeforeStep, phFlowUpdate
+  &phflowid, phFlowCopy, phFlowDump, phFlowBeforeStep, phFlowUpdate
 ));
