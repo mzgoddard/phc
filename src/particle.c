@@ -79,21 +79,12 @@ phbool phIgnoresOther(phparticle *self, void *other) {
 }
 
 static void _phAckCollision(phparticle *self, phparticle *other) {
-  // if (self->_worldData) {
-    // phAppend(&self->_worldData.collideWith, other);
-    pharray *array = &self->_worldData.collideWith;
-    if (array->capacity == self->_worldData.collideWithIndex) {
-      void **oldItems = array->items;
-      array->items = calloc(array->capacity + 32, sizeof(phparticle *));
-      for (phint i = 0; i < array->capacity; ++i) {
-        array->items[i] = oldItems[i];
-      }
-      array->capacity += 32;
-      free(oldItems);
-    }
+  pharray *array = &self->_worldData.collideWith;
+  if (array->capacity == self->_worldData.collideWithIndex) {
+    phResizeItems(array, 32);
+  }
 
-    array->items[self->_worldData.collideWithIndex++] = other;
-  // }
+  array->items[self->_worldData.collideWithIndex++] = other;
 }
 
 phbool phTest(phparticle *self, phparticle *other, phcollision *col) {

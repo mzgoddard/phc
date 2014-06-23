@@ -572,14 +572,7 @@ phworld * phWorldAddParticle(phworld *self, phparticle *particle) {
   particle->_worldData.oldPosition = particle->position;
   phAppend(&self->particles, particle);
   if (self->particleArray.capacity == self->particleIndex) {
-    phint oldCapacity = self->particleArray.capacity;
-    void **oldItems = self->particleArray.items;
-    phint newCapacity = oldCapacity + 1024;
-    self->particleArray = pharray(newCapacity, calloc(newCapacity, sizeof(void *)));
-    for (phint i = 0; i < oldCapacity; ++i) {
-      self->particleArray.items[i] = oldItems[i];
-    }
-    free(oldItems);
+    phResizeItems(&self->particleArray, 1024);
   }
   self->particleArray.items[self->particleIndex++] = particle;
   phDdvtAdd(&self->_optimization.ddvt, particle);

@@ -868,6 +868,18 @@ phbool phContains(phiterator *, void *);
 void * phGetIndex(phiterator *, phint);
 phbool phSame(void *ctx, void *item);
 
+static pharray * phResizeItems(pharray *self, phint capacityInc) {
+  phint oldCapacity = self->capacity;
+  void **oldItems = self->items;
+  phint newCapacity = oldCapacity + capacityInc;
+  *self = pharray(newCapacity, calloc(newCapacity, sizeof(void *)));
+  for (phint i = 0; i < oldCapacity; ++i) {
+    self->items[i] = oldItems[i];
+  }
+  free(oldItems);
+  return self;
+}
+
 static pharray * phToArray(phiterator *self, pharray *ary) {
   phint i = 0;
   phint capacity = ary->capacity;
