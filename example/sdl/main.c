@@ -180,46 +180,32 @@ typedef struct phmouse {
   0, 0, 0, 0 \
 })
 
-struct {
-  phlist particles;
-  phlist constraints;
-} flowline = {
-  phlist(),
-  phlist()
-};
+phcomposite flowline = phcomposite(phlist(), phlist());
+
+void addFlowParticle(phcomposite *self, phv position, phv lastPosition) {
+  phparticle *particle = phCreate(phparticle, position);
+  particle->radius = 50;
+  phv direction = phSub(position, lastPosition);
+  if (phMag2(direction) == 0) {
+    direction = phv(1, 1);
+  }
+  phflow *flow = phCreate(
+    phflow,
+    particle,
+    phScale(phUnit(direction), 1000)
+  );
+  phAppend(&self->particles, particle);
+  phAppend(&self->constraints, flow);
+}
 
 void input(phmouse *state, phmouse *lastState) {
   if (state->pressed && !lastState->pressed) {
-    phlistiterator litr;
     // Remove current particles.
-    phIterate(
-      phIterator(&flowline.particles, &litr),
-      (phitrfn) phWorldRemoveParticle,
-      world
-    );
-    phIterate(
-      phIterator(&flowline.constraints, &litr),
-      (phitrfn) phWorldRemoveConstraint,
-      world
-    );
+    phWorldRemoveComposite(world, &flowline);
     // Free current particles.
-    phIterate(
-      phIterator(&flowline.particles, &litr),
-      (phitrfn) phCall,
-      (phitrfn) phParticleDump
-    );
-    phClean(&flowline.particles, free);
-    phClean(&flowline.constraints, free);
+    phCompositeDump(&flowline);
     // Add first particle.
-    phparticle *particle = phCreate(phparticle, state->position);
-    particle->radius = 50;
-    phflow *flow = phCreate(
-      phflow,
-      particle,
-      phScale(phUnit(phv(1, 1)), 1000)
-    );
-    phAppend(&flowline.particles, particle);
-    phAppend(&flowline.constraints, flow);
+    addFlowParticle(&flowline, state->position, lastState->position);
     printf("press\n");
   } else if (state->pressed && lastState->pressed) {
     // If far enough, add new particle.
@@ -229,29 +215,11 @@ void input(phmouse *state, phmouse *lastState) {
       lastFlow->force =
         phScale(phUnit(phSub(state->position, lastParticle->position)), 1000);
 
-      phparticle *particle = phCreate(phparticle, state->position);
-      particle->radius = 50;
-      phflow *flow = phCreate(
-        phflow,
-        particle,
-        phScale(phUnit(phSub(state->position, lastState->position)), 1000)
-      );
-      phAppend(&flowline.particles, particle);
-      phAppend(&flowline.constraints, flow);
+      addFlowParticle(&flowline, state->position, lastState->position);
     }
   } else if (lastState->pressed && !state->pressed) {
     // Add particles to world.
-    phlistiterator litr;
-    phIterate(
-      phIterator(&flowline.particles, &litr),
-      (phitrfn) phWorldAddParticle,
-      world
-    );
-    phIterate(
-      phIterator(&flowline.constraints, &litr),
-      (phitrfn) phWorldAddConstraint,
-      world
-    );
+    phWorldAddComposite(world, &flowline);
     printf("release\n");
   }
 }
