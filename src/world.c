@@ -658,3 +658,41 @@ phworld * phWorldSafeRemoveConstraint(
     self, (phitrfn) phWorldRemoveConstraint, freefn, constraint
   );
 }
+
+phworld * phWorldAddComposite(phworld *self, phcomposite *composite) {
+  phlistiterator litr;
+  phIterate(
+    phIterator(&composite->particles, &litr),
+    (phitrfn) phWorldAddParticle,
+    self
+  );
+  phIterate(
+    phIterator(&composite->constraints, &litr),
+    (phitrfn) phWorldAddConstraint,
+    self
+  );
+  return self;
+}
+
+phworld * phWorldRemoveComposite(phworld *self, phcomposite *composite) {
+  phlistiterator litr;
+  phIterate(
+    phIterator(&composite->particles, &litr),
+    (phitrfn) phWorldRemoveParticle,
+    self
+  );
+  phIterate(
+    phIterator(&composite->constraints, &litr),
+    (phitrfn) phWorldRemoveConstraint,
+    self
+  );
+  return self;
+}
+
+phworld * phWorldSafeRemoveComposite(
+  phworld *self, phcomposite *composite, phfreefn freefn
+) {
+  return phAfterStep(
+    self, (phitrfn) phWorldRemoveConstraint, freefn, composite
+  );
+}

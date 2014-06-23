@@ -584,6 +584,16 @@ typedef struct phflow {
 
 #define phflow(particle, force) ((phflow) {phflowtype, particle, force})
 
+typedef struct phcomposite {
+  phlist particles;
+  phlist constraints;
+} phcomposite;
+
+#define phcomposite(particles, constraints) ((phcomposite) { \
+ particles, \
+ constraints \
+})
+
 #ifdef EMSCRIPTEN
 // Compiling under emscripten complains about implicit sqrt declaration.
 // double sqrt(double);
@@ -994,6 +1004,9 @@ phworld * phWorldSafeRemoveParticle(phworld *, phparticle *, phfreefn);
 phworld * phWorldAddConstraint(phworld *, phconstraint *);
 phworld * phWorldRemoveConstraint(phworld *, phconstraint *);
 phworld * phWorldSafeRemoveConstraint(phworld *, phconstraint *, phfreefn);
+phworld * phWorldAddComposite(phworld *, phcomposite *);
+phworld * phWorldRemoveComposite(phworld *, phcomposite *);
+phworld * phWorldSafeRemoveComposite(phworld *, phcomposite *, phfreefn);
 
 static phbool phWorldParticleNext(phworldparticleiterator *itr) {
   return phArrayNext(&itr->arrayitr);
@@ -1016,8 +1029,9 @@ static phiterator * phWorldParticleIterator(
 
 // phComposite
 
-phbyte * phCompositeFreeze(phlist *, phlist *);
-void phCompositeThaw(phlist *, phlist *, phbyte *);
-void phCompositeCopy(phlist *dst1, phlist *dst2, phlist *src1, phlist *src2);
+phbyte * phCompositeFreeze(phcomposite *);
+phcomposite * phCompositeThaw(phcomposite *, phbyte *);
+phcomposite * phCompositeCopy(phcomposite *dst, phcomposite *src);
+phcomposite * phCompositeDump(phcomposite *);
 
 #endif /* end of include guard: PH_H_7BP0TPQV */
