@@ -88,13 +88,6 @@ static void _phAckCollision(phparticle *self, phparticle *other) {
 }
 
 phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
-  if (
-    (self->collideAgainst & other->collideMask) == 0 || 
-      (other->collideAgainst & self->collideMask) == 0
-  ) {
-    return 0;
-  }
-
   phdouble
     ax = self->position.x,
     ay = self->position.y,
@@ -131,9 +124,17 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
   }
 
   return 0;
+  #endif
 }
 
 static phbool _phPreSolve(phparticle *self, phparticle *other) {
+  if (
+    (self->collideAgainst & other->collideMask) == 0 || 
+      (other->collideAgainst & self->collideMask) == 0
+  ) {
+    return 1;
+  }
+
   if (_phHasCollidedAlready(self, other)) {
     return 1;
   }
