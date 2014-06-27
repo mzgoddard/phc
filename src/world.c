@@ -289,6 +289,7 @@ void * _phThreadMain(void *_self) {
       pthread_cond_signal(&self->ctrl->endCond);
       pthread_mutex_unlock(&self->ctrl->endMutex);
     }
+    self->activeBool = 0;
     pthread_cond_wait(&self->step, &self->active);
 
     self->ctrl->handle(self->data);
@@ -362,28 +363,38 @@ static void _phThreadCtrlRun(
   self->handle = handle;
 
   // Activate threads.
-  phint activeThreads = 0;
+  phint activeThreads = data->capacity;
   for (phint i = 0, l = data->capacity; i < l; ++i) {
     phthread *thread = self->threads.items[i];
     thread->data = data->items[i];
-    pthread_cond_signal(&thread->step);
+    thread->activeBool = 1;
     pthread_mutex_unlock(&thread->active);
-    activeThreads++;
+    pthread_cond_signal(&thread->step);
   }
   // Wait for one of the threads to say its done.
   pthread_cond_wait(&self->endCond, &self->endMutex);
-  // Loop while yielding until all threads are done.
+  // Loop, checking whether they are active until all threads have stopped.
+  pthread_mutex_unlock(&self->endMutex);
   while (activeThreads) {
-    pthread_mutex_unlock(&self->endMutex);
-    sched_yield();
-    pthread_mutex_lock(&self->endMutex);
+    activeThreads = data->capacity;
     for (phint i = 0, l = data->capacity; i < l; ++i) {
       phthread *thread = self->threads.items[i];
-      if (!pthread_mutex_trylock(&thread->active)) {
+      if (!thread->activeBool) {
         activeThreads--;
       }
     }
+    if (!activeThreads) {
+      break;
+    }
+    sched_yield();
   }
+
+  // Lock all threads up for the next kickoff.
+  for (phint i = 0, l = data->capacity; i < l; ++i) {
+    phthread *thread = self->threads.items[i];
+    pthread_mutex_lock(&thread->active);
+  }
+  pthread_mutex_lock(&self->endMutex);
 }
 
 static void _phSolveCollisionsWithThreads(phworld *self) {

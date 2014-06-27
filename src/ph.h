@@ -401,6 +401,7 @@ typedef struct phthread {
   phthreadctrl *ctrl;
   pthread_cond_t step;
   pthread_mutex_t active;
+  phbool activeBool;
   phbool signalCtrl;
   void *data;
 } phthread;
@@ -408,7 +409,7 @@ typedef struct phthread {
 #define phthread() ((phthread) { \
   0, NULL, \
   PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, \
-  1, NULL \
+  1, 1, NULL \
 })
 
 typedef struct phparticleintegratethreaddata {
