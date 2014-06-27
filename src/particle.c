@@ -101,6 +101,13 @@ phbool phTest(phparticle *self, phparticle *other, phcollision *col) {
     ingress;
 
   ingress = abx*abx+aby*aby;
+  #if !PH_THREAD
+  col->isTrigger = self->isTrigger || other->isTrigger;
+  col->isStatic = !col->isTrigger && self->isStatic;
+  col->isNormal = !col->isTrigger && !col->isStatic;
+  col->ingress = ingress;
+  return ingress < abr * abr;
+  #else
   if (((ingress < abr*abr))) {
     col->isTrigger = self->isTrigger || other->isTrigger;
 
@@ -159,18 +166,36 @@ void phSolve(phcollision *col) {
   }
 
   phdouble
-    factor = (self->factor * other->factor),
-    lambx = (col->lambx) * factor,
-    lamby = (col->lamby) * factor,
+    #if !PH_THREAD
+    ax = self->position.x,
+    ay = self->position.y,
+    bx = other->position.x,
+    by = other->position.y,
+    abr = self->radius + other->radius,
+    avx = self->lastPosition.x - ax,
+    avy = self->lastPosition.y - ay,
+    bvx = other->lastPosition.x - bx,
+    bvy = other->lastPosition.y - by,
+    // Increase the ingress by a small value so its not zero.
+    ingress = sqrt(col->ingress) + 1e-5,
+    factor = self->factor * other->factor,
+    pqt = (abr / ingress - 1) * factor,
+    lambx = (ax - bx) * pqt,
+    lamby = (ay - by) * pqt,
+    #else
+    factor = self->factor * other->factor,
+    lambx = col->lambx * factor,
+    lamby = col->lamby * factor,
+    avx = self->lastPosition.x - self->position.x,
+    avy = self->lastPosition.y - self->position.y,
+    bvx = other->lastPosition.x - other->position.x,
+    bvy = other->lastPosition.y - other->position.y,
+    #endif
     amsq = self->mass,
     bmsq = other->mass,
     mass = amsq + bmsq,
     am = bmsq / mass,
     bm = amsq / mass,
-    avx = self->lastPosition.x - self->position.x,
-    avy = self->lastPosition.y - self->position.y,
-    bvx = other->lastPosition.x - other->position.x,
-    bvy = other->lastPosition.y - other->position.y,
     fric = 1 - (self->friction * other->friction);
 
   avx *= fric;
@@ -197,11 +222,27 @@ void phSolveStatic(phcollision *col) {
   }
 
   phdouble
-    factor = (self->factor * other->factor),
-    lambx = (col->lambx) * factor,
-    lamby = (col->lamby) * factor,
+    #if !PH_THREAD
+    ax = self->position.x,
+    ay = self->position.y,
+    bx = other->position.x,
+    by = other->position.y,
+    abr = self->radius + other->radius,
+    bvx = other->lastPosition.x - bx,
+    bvy = other->lastPosition.y - by,
+    // Increase the ingress by a small value so its not zero.
+    ingress = sqrt(col->ingress) + 1e-5,
+    factor = self->factor * other->factor,
+    pqt = (abr / ingress - 1) * factor,
+    lambx = (ax - bx) * pqt,
+    lamby = (ay - by) * pqt,
+    #else
+    factor = self->factor * other->factor,
+    lambx = col->lambx * factor,
+    lamby = col->lamby * factor,
     bvx = other->lastPosition.x - other->position.x,
     bvy = other->lastPosition.y - other->position.y,
+    #endif
     fric = 1 - (self->friction * other->friction);
 
   bvx *= fric;
