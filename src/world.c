@@ -306,7 +306,7 @@ static void _phThreadInit(phthread *self, phthreadctrl *ctrl) {
 
   pthread_create(&self->thread, NULL, _phThreadMain, self);
   pthread_cond_wait(&self->ctrl->endCond, &self->ctrl->endMutex);
-  pthread_mutex_lock(&self->active);
+  // pthread_mutex_lock(&self->active);
 }
 
 static void _phThreadInitGroup(phthreadctrl *self, phint num) {
@@ -368,7 +368,7 @@ static void _phThreadCtrlRun(
     phthread *thread = self->threads.items[i];
     thread->data = data->items[i];
     thread->activeBool = 1;
-    pthread_mutex_unlock(&thread->active);
+    // pthread_mutex_unlock(&thread->active);
     pthread_cond_signal(&thread->step);
   }
   // Wait for one of the threads to say its done.
@@ -390,10 +390,10 @@ static void _phThreadCtrlRun(
   }
 
   // Lock all threads up for the next kickoff.
-  for (phint i = 0, l = data->capacity; i < l; ++i) {
-    phthread *thread = self->threads.items[i];
-    pthread_mutex_lock(&thread->active);
-  }
+  // for (phint i = 0, l = data->capacity; i < l; ++i) {
+  //   phthread *thread = self->threads.items[i];
+  //   pthread_mutex_lock(&thread->active);
+  // }
   pthread_mutex_lock(&self->endMutex);
 }
 
